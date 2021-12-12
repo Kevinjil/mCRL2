@@ -182,9 +182,6 @@ class pbesinst_lazy_algorithm
     /// \brief A lookup map for PBES equations.
     pbes_equation_index m_equation_index;
 
-    /// \brief The rewriter.
-    enumerate_quantifiers_rewriter R;
-
     /// \brief The propositional variable instantiations that need to be handled.
     pbesinst_lazy_todo todo;
 
@@ -197,8 +194,10 @@ class pbesinst_lazy_algorithm
     // \brief The number of iterations
     std::size_t m_iteration_count = 0;
 
-    // The four data structures that must be separate per thread.
+    // The data structures that must be separate per thread.
     mutable data::mutable_indexed_substitution<> m_global_sigma;
+    /// \brief The rewriter.
+    enumerate_quantifiers_rewriter m_global_R;
 
     // Mutexes
     std::mutex m_exclusive_todo_access;
@@ -296,7 +295,7 @@ class pbesinst_lazy_algorithm
        datar(construct_rewriter(p)),
        m_pbes(preprocess(p)),
        m_equation_index(p),
-       R(datar, p.data())
+       m_global_R(datar, p.data())
     { }
 
     virtual ~pbesinst_lazy_algorithm() = default;
@@ -354,9 +353,12 @@ class pbesinst_lazy_algorithm
       const std::size_t process_number,
       std::atomic<std::size_t>& number_of_active_processes,
       data::mutable_indexed_substitution<> sigma,
+      enumerate_quantifiers_rewriter R
     )
     {
       mCRL2log(log::verbose) << "Start thread " << process_number << ".\n";
+      R.thread_initialise();
+
       while (number_of_active_processes > 0) {
         if (m_options.number_of_threads>0) m_exclusive_todo_access.lock();
         while (!todo->elements().empty() && !m_must_abort)
@@ -375,7 +377,7 @@ class pbesinst_lazy_algorithm
           data::add_assignments(sigma, eqn.variable().parameters(), X_e.parameters());
           pbes_expression psi_e = R(phi, sigma);
           R.clear_identifier_generator();
-          data::remove_assignments(thread_sigma, eqn.variable().parameters());
+          data::remove_assignments(sigma, eqn.variable().parameters());
 
           // optional step
           psi_e = rewrite_psi(eqn.symbol(), X_e, psi_e);
@@ -425,7 +427,7 @@ class pbesinst_lazy_algorithm
         pbes_system::replace_constants_by_variables(m_pbes, datar, m_global_sigma);
       }
 
-      init = atermpp::down_cast<propositional_variable_instantiation>(R(m_pbes.initial_state(), m_global_sigma));
+      init = atermpp::down_cast<propositional_variable_instantiation>(m_global_R(m_pbes.initial_state(), m_global_sigma));
       todo.insert(init);
       discovered.insert(init);
       const std::size_t number_of_threads=m_options.number_of_threads;
@@ -441,7 +443,8 @@ class pbesinst_lazy_algorithm
             &todo,
             i,
             number_of_active_processes,
-            m_global_sigma
+            m_global_sigma,
+            m_global_R.clone()
           );
         });
         threads.push_back(std::move(tr));
@@ -462,7 +465,7 @@ class pbesinst_lazy_algorithm
 
     enumerate_quantifiers_rewriter& rewriter()
     {
-      return R;
+      return m_global_R;
     }
 };
 

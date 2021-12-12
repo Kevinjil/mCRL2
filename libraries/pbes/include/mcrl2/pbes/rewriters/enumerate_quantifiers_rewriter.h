@@ -247,6 +247,24 @@ struct enumerate_quantifiers_rewriter
     {
       m_id_generator.clear();
     }
+
+    /// \brief Create a clone of the rewriter in which the underlying rewriter is copied, and not passed as a shared pointer. 
+    /// \details This is useful when the rewriter is used in different parallel processes. One rewriter can only be used sequentially. 
+    /// \return A rewriter, with a copy of the underlying jitty, jittyc or jittyp rewriting engine. 
+    enumerate_quantifiers_rewriter clone()
+    {
+      return enumerate_quantifiers_rewriter(m_rewriter.clone(), m_dataspec, m_enumerate_infinite_sorts);
+    }
+
+    /// \brief Initialises this rewriter with thread dependent information. 
+    /// \details This function sets a pointer to the m_busy_flag and m_forbidden_flag of this.
+    ///          process, such that rewriter can access these faster than via the general thread.
+    ///          local mechanism. It is expected that this is not needed when compilers become.
+    ///          faster, and should be removed in due time. 
+    void thread_initialise()
+    {
+      m_rewriter.thread_initialise();
+    }
 };
 
 } // namespace pbes_system
