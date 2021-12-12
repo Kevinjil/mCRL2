@@ -9,6 +9,8 @@
 /// \file mcrl2/pbes/pbesinst_lazy_algorithm.h
 /// \brief A lazy algorithm for instantiating a PBES, ported from bes_deprecated.h.
 
+#include <thread>
+
 #include "mcrl2/data/substitution_utility.h"
 #include "mcrl2/pbes/detail/bes_equation_limit.h"
 #include "mcrl2/pbes/detail/instantiate_global_variables.h"
@@ -195,6 +197,14 @@ class pbesinst_lazy_algorithm
     // \brief The number of iterations
     std::size_t m_iteration_count = 0;
 
+    // The four data structures that must be separate per thread.
+    mutable data::mutable_indexed_substitution<> m_global_sigma;
+
+    // Mutexes
+    std::mutex m_exclusive_todo_access;
+
+    volatile bool m_must_abort = false;
+
     // \brief Returns a status message about the progress
     virtual std::string status_message(std::size_t equation_count)
     {
@@ -339,54 +349,109 @@ class pbesinst_lazy_algorithm
       return false;
     }
 
+    virtual void run_thread(
+      pbesinst_lazy_todo* todo,
+      const std::size_t process_number,
+      std::atomic<std::size_t>& number_of_active_processes,
+      data::mutable_indexed_substitution<> sigma,
+    )
+    {
+      mCRL2log(log::verbose) << "Start thread " << process_number << ".\n";
+      while (number_of_active_processes > 0) {
+        if (m_options.number_of_threads>0) m_exclusive_todo_access.lock();
+        while (!todo->elements().empty() && !m_must_abort)
+        {
+          ++m_iteration_count;
+          mCRL2log(log::status) << status_message(m_iteration_count);
+          detail::check_bes_equation_limit(m_iteration_count);
+
+          propositional_variable_instantiation X_e = next_todo();
+
+          if (m_options.number_of_threads>0) m_exclusive_todo_access.unlock();
+
+          std::size_t index = m_equation_index.index(X_e.name());
+          const pbes_equation& eqn = m_pbes.equations()[index];
+          const auto& phi = eqn.formula();
+          data::add_assignments(sigma, eqn.variable().parameters(), X_e.parameters());
+          pbes_expression psi_e = R(phi, sigma);
+          R.clear_identifier_generator();
+          data::remove_assignments(thread_sigma, eqn.variable().parameters());
+
+          // optional step
+          psi_e = rewrite_psi(eqn.symbol(), X_e, psi_e);
+
+          // report the generated equation
+          std::size_t k = m_equation_index.rank(X_e.name());
+          mCRL2log(log::debug) << "generated equation " << X_e << " = " << psi_e << " with rank " << k << std::endl;
+          on_report_equation(X_e, psi_e, k);
+
+          std::set<propositional_variable_instantiation> occ = find_propositional_variable_instantiations(psi_e);
+          
+          if (m_options.number_of_threads>0) m_exclusive_todo_access.lock();
+
+          todo->insert(occ.begin(), occ.end(), discovered);
+          discovered.insert(occ.begin(), occ.end());
+          on_discovered_elements(occ);
+
+          if (solution_found(init))
+          {
+            m_must_abort = true;
+          }
+        }
+        if (m_options.number_of_threads>0) m_exclusive_todo_access.unlock();
+
+        // Check whether all processes are ready. If so the number_of_active_processes becomes 0. 
+        // Otherwise, this thread becomes active again, and tries to see whether the todo buffer is
+        // not empty, to take up more work. 
+        number_of_active_processes--;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        if (number_of_active_processes>0)
+        {
+          number_of_active_processes++;
+        }
+      }
+      mCRL2log(log::verbose) << "Stop thread " << process_number << ".\n";
+    }
+
     /// \brief Runs the algorithm. The result is obtained by calling the function \p get_result.
     virtual void run()
     {
       using utilities::detail::contains;
 
-      m_iteration_count = 0;
-      data::mutable_indexed_substitution<> sigma;
+      std::atomic<size_t> m_iteration_count(0);
+
       if (m_options.replace_constants_by_variables)
       {
-        pbes_system::replace_constants_by_variables(m_pbes, datar, sigma);
+        pbes_system::replace_constants_by_variables(m_pbes, datar, m_global_sigma);
       }
 
-      init = atermpp::down_cast<propositional_variable_instantiation>(R(m_pbes.initial_state(), sigma));
+      init = atermpp::down_cast<propositional_variable_instantiation>(R(m_pbes.initial_state(), m_global_sigma));
       todo.insert(init);
       discovered.insert(init);
-      while (!todo.elements().empty())
+      const std::size_t number_of_threads=m_options.number_of_threads;
+      std::vector<std::thread> threads;
+      std::atomic<std::size_t> number_of_active_processes=number_of_threads;
+
+      threads.reserve(number_of_threads);
+
+      for(std::size_t i=0; i<number_of_threads; ++i)
       {
-        ++m_iteration_count;
-        mCRL2log(log::status) << status_message(m_iteration_count);
-        detail::check_bes_equation_limit(m_iteration_count);
-
-        propositional_variable_instantiation X_e = next_todo();
-        std::size_t index = m_equation_index.index(X_e.name());
-        const pbes_equation& eqn = m_pbes.equations()[index];
-        const auto& phi = eqn.formula();
-        data::add_assignments(sigma, eqn.variable().parameters(), X_e.parameters());
-        pbes_expression psi_e = R(phi, sigma);
-        R.clear_identifier_generator();
-        data::remove_assignments(sigma, eqn.variable().parameters());
-
-        // optional step
-        psi_e = rewrite_psi(eqn.symbol(), X_e, psi_e);
-
-        // report the generated equation
-        std::size_t k = m_equation_index.rank(X_e.name());
-        mCRL2log(log::debug) << "generated equation " << X_e << " = " << psi_e << " with rank " << k << std::endl;
-        on_report_equation(X_e, psi_e, k);
-
-        std::set<propositional_variable_instantiation> occ = find_propositional_variable_instantiations(psi_e);
-        todo.insert(occ.begin(), occ.end(), discovered);
-        discovered.insert(occ.begin(), occ.end());
-        on_discovered_elements(occ);
-
-        if (solution_found(init))
-        {
-          break;
-        }
+        std::thread tr([&, i](){
+          run_thread(
+            &todo,
+            i,
+            number_of_active_processes,
+            m_global_sigma
+          );
+        });
+        threads.push_back(std::move(tr));
       }
+
+      for(std::size_t i=0; i<number_of_threads; ++i)
+      {
+        threads[i].join();
+      }
+
       on_end_while_loop();
     }
 
