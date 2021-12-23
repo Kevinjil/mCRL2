@@ -14,6 +14,7 @@
 
 #include <random>
 #include <thread>
+#include <type_traits>
 #include "mcrl2/utilities/detail/io.h"
 #include "mcrl2/utilities/skip.h"
 #include "mcrl2/atermpp/standard_containers/deque.h"
@@ -422,29 +423,37 @@ class explorer: public abortable
     }
 
     template <typename DataExpressionSequence>
-    state compute_state(const DataExpressionSequence& v,
-                        data::mutable_indexed_substitution<>& sigma,
-                        data::rewriter& rewr) const
+    void compute_state(state& result,
+                       const DataExpressionSequence& v,
+                       data::mutable_indexed_substitution<>& sigma,
+                       data::rewriter& rewr) const
     {
-      return state(v.begin(), m_n, [&](data::data_expression& result, const data::data_expression& x) { return rewr(result, x, sigma); });
+      lps::make_state(result, 
+                      v.begin(), 
+                      m_n, 
+                      [&](data::data_expression& result, const data::data_expression& x) { return rewr(result, x, sigma); });
     }
 
     template <typename DataExpressionSequence>
-    stochastic_state compute_stochastic_state(const stochastic_distribution& distribution, 
-                                              const DataExpressionSequence& next_state,
-                                              data::mutable_indexed_substitution<>& sigma,
-                                              data::rewriter& rewr, 
-                                              data::enumerator_algorithm<>& enumerator) const
+    void compute_stochastic_state(stochastic_state& result,
+                                  const stochastic_distribution& distribution, 
+                                  const DataExpressionSequence& next_state,
+                                  data::mutable_indexed_substitution<>& sigma,
+                                  data::rewriter& rewr, 
+                                  data::enumerator_algorithm<>& enumerator) const
     {                                              
-      stochastic_state result;                     
+      result.clear();
       if (distribution.is_defined())
       {
-        enumerator.enumerate(enumerator_element(distribution.variables(), distribution.distribution()),
+        enumerator.enumerate<enumerator_element>(
+                    distribution.variables(), 
+                    distribution.distribution(),
                     sigma,
                     [&](const enumerator_element& p) {
                       p.add_assignments(distribution.variables(), sigma, rewr);
                       result.probabilities.push_back(p.expression());
-                      result.states.push_back(compute_state(next_state,sigma,rewr));
+                      result.states.emplace_back();
+                      compute_state(result.states.back(), next_state, sigma, rewr);
                       return false;
                     },
                     [](const data::data_expression& x) { return x == real_zero(); }
@@ -458,44 +467,47 @@ class explorer: public abortable
       else
       {
         result.probabilities.push_back(real_one());
-        result.states.push_back(compute_state(next_state,sigma,rewr));
+        result.states.emplace_back();
+        compute_state(result.states.back(),next_state,sigma,rewr);
       }
-      return result;
     }
 
-    lps::multi_action rewrite_action(const lps::multi_action& a,
-                                     data::mutable_indexed_substitution<>& sigma,
-                                     data::rewriter& rewr) const
+    /// Rewrite action a, and put it back in place. 
+    lps::multi_action rewrite_action(
+                             const lps::multi_action& a,
+                             data::mutable_indexed_substitution<>& sigma,
+                             data::rewriter& rewr) const
     {
       const process::action_list& actions = a.actions();
       const data::data_expression& time = a.time();
-      return
-        lps::multi_action(
+      return lps::multi_action(
           process::action_list(
             actions.begin(),
             actions.end(),
-            [&](const process::action& a)
+            [&](process::action& result, const process::action& a)
             {
-              const auto& args = a.arguments();
-//  XXXX kan dit met een iterator, direct op actions, zonder een data_expression_list????
-              return process::action(a.label(), 
-                                     data::data_expression_list(args.begin(), args.end(), 
-                                                                [&](const data::data_expression& x) 
-                                                                            { return rewr(x, sigma); }));     
+              const data::data_expression_list& args = a.arguments();
+              return process::make_action(result, 
+                                          a.label(), 
+                                          data::data_expression_list(args.begin(), 
+                                                                     args.end(), 
+                                                                     [&](data::data_expression& result, 
+                                                                         const data::data_expression& x) -> void
+                                                                                 { rewr(result, x, sigma); }));     
             }
           ),
           a.has_time() ? rewr(time, sigma) : time
         );
     }
 
-    void check_enumerator_solution(const enumerator_element& p, 
+    void check_enumerator_solution(const data::data_expression& p_expression, // WAS: const enumerator_element& p, 
                                    const explorer_summand& summand,
                                    data::mutable_indexed_substitution<>& sigma,
                                    data::rewriter& rewr) const
     {
-      if (p.expression() != data::sort_bool::true_())
+      if (p_expression != data::sort_bool::true_())
       {
-        std::string printed_condition = data::pp(p.expression());
+        std::string printed_condition = data::pp(p_expression);
         data::remove_assignments(sigma, m_process_parameters);
         data::remove_assignments(sigma, summand.variables);
         data::data_expression reduced_condition = rewr(summand.condition, sigma);
@@ -515,6 +527,7 @@ class explorer: public abortable
       data::mutable_indexed_substitution<>& sigma,
       data::rewriter& rewr,
       data::data_expression& condition,
+      state_type& s1,
       data::enumerator_algorithm<>& enumerator,
       data::enumerator_identifier_generator& id_generator,
       ReportTransition report_transition = ReportTransition()
@@ -529,74 +542,133 @@ class explorer: public abortable
         rewr(condition, summand.condition, sigma);
         if (!data::is_false(condition))
         {
-          enumerator.enumerate(enumerator_element(summand.variables, condition),
-                      sigma,
-                      [&](const enumerator_element& p) {
-                        check_enumerator_solution(p, summand,sigma,rewr);
-                        p.add_assignments(summand.variables, sigma, rewr);
-                        lps::multi_action a = rewrite_action(summand.multi_action,sigma,rewr);
-                        state_type s1;
-                        if constexpr (Stochastic)
-                        {
-                          s1 = compute_stochastic_state(summand.distribution, summand.next_state, sigma, rewr, enumerator);
-                        }
-                        else
-                        {
-                          s1 = compute_state(summand.next_state,sigma,rewr);
-                          if (!confluent_summands.empty())
+          if (summand.variables.size()==0)
+          {
+            // There is only one solution that is generated as there are no variables. 
+            check_enumerator_solution(condition, summand,sigma,rewr);
+            // state_type s1;
+            if constexpr (Stochastic)
+            {
+              compute_stochastic_state(s1, summand.distribution, summand.next_state, sigma, rewr, enumerator);
+            }
+            else
+            {
+              compute_state(s1,summand.next_state,sigma,rewr);
+              if (!confluent_summands.empty())
+              {
+                s1 = find_representative(s1, confluent_summands, sigma, rewr, enumerator, id_generator); 
+              }
+            }
+            // Check whether report transition only needs a state, and no action.
+            if constexpr (utilities::is_applicable<ReportTransition,state_type,void>::value)
+            {
+              report_transition(s1);
+            }
+            else
+            {
+              if (m_options.rewrite_actions)
+              {
+                lps::multi_action a=rewrite_action(summand.multi_action,sigma,rewr);
+                report_transition(a,s1);
+              }
+              else
+              {
+                report_transition(summand.multi_action,s1);
+              }
+            }
+          }
+          else // There are variables to be enumerated.
+          {
+            enumerator.enumerate<enumerator_element>(
+                        summand.variables, 
+                        condition,
+                        sigma,
+                        [&](const enumerator_element& p) {
+                          check_enumerator_solution(p.expression(), summand, sigma, rewr);
+                          p.add_assignments(summand.variables, sigma, rewr);
+                          state_type s1;
+                          if constexpr (Stochastic)
                           {
-                            s1 = find_representative(s1, confluent_summands, sigma, rewr, enumerator, id_generator);
+                            compute_stochastic_state(s1, summand.distribution, summand.next_state, sigma, rewr, enumerator);
                           }
-                        }
-                        if (m_recursive)
-                        {
-                          data::remove_assignments(sigma, summand.variables);
-                        }
-                        report_transition(a, s1);
-                        return false;
-                      },
-                      data::is_false
-          );
+                          else
+                          {
+                            compute_state(s1,summand.next_state,sigma,rewr);
+                            if (!confluent_summands.empty())
+                            {
+                              s1 = find_representative(s1, confluent_summands, sigma, rewr, enumerator, id_generator);
+                            }
+                          }
+                          if (m_recursive)
+                          {
+                            data::remove_assignments(sigma, summand.variables);
+                          }
+                          // Check whether report transition only needs a state, and no action.
+                          if constexpr (utilities::is_applicable<ReportTransition,state_type,void>::value)
+                          {
+                            report_transition(s1);
+                          }
+                          else 
+                          {
+                            if (m_options.rewrite_actions)
+                            {
+                              lps::multi_action a=rewrite_action(summand.multi_action,sigma,rewr);
+                              report_transition(a,s1);
+                            }
+                            else
+                            {
+                              report_transition(summand.multi_action,s1);
+                            }
+                          }
+                          return false;
+                        },
+                        data::is_false
+            );
+          }
         }
       }
       else
       {
         static std::mutex cache_mutex; // This mutex could be created per summand. This may allow for more parallel behaviour if required. 
-        if (m_options.number_of_threads>0) cache_mutex.lock();
         auto key = summand.compute_key(sigma);
         auto& cache = summand.cache_strategy == caching::global ? global_cache : summand.local_cache;
+        if (m_options.number_of_threads>0) cache_mutex.lock();
         auto q = cache.find(key);
         if (q == cache.end())
         {
+          if (m_options.number_of_threads>0) cache_mutex.unlock();
           rewr(condition, summand.condition, sigma);
           std::list<data::data_expression_list> solutions;
           if (!data::is_false(condition))
           {
-            enumerator.enumerate(enumerator_element(summand.variables, condition),
+            enumerator.enumerate<enumerator_element>(
+                        summand.variables, 
+                        condition,
                         sigma,
                         [&](const enumerator_element& p) {
-                          check_enumerator_solution(p, summand, sigma, rewr);
+                          check_enumerator_solution(p.expression(), summand, sigma, rewr);
                           solutions.push_back(p.assign_expressions(summand.variables, rewr));
                           return false;
                         },
                         data::is_false
             );
           }
+          if (m_options.number_of_threads>0) cache_mutex.lock();
           q = cache.insert({key, solutions}).first;
         }
         if (m_options.number_of_threads>0) cache_mutex.unlock();
+
+        state_type s1;
         for (const data::data_expression_list& e: q->second)
         {
           data::add_assignments(sigma, summand.variables, e);
-          lps::multi_action a = rewrite_action(summand.multi_action,sigma,rewr);
-          state_type s1;
           if constexpr (Stochastic)
           {
-            s1 = compute_stochastic_state(summand.distribution, summand.next_state, sigma, rewr, enumerator);
+            compute_stochastic_state(s1, summand.distribution, summand.next_state, sigma, rewr, enumerator);
           }
           else
           {
-            s1 = compute_state(summand.next_state,sigma,rewr);
+            compute_state(s1,summand.next_state,sigma,rewr);
             if (!confluent_summands.empty())
             {
               s1 = find_representative(s1, confluent_summands, sigma, rewr, enumerator, id_generator);
@@ -606,7 +678,23 @@ class explorer: public abortable
           {
             data::remove_assignments(sigma, summand.variables);
           }
-          report_transition(a, s1);
+          // If report transition does not require a transition, do not calculate it. 
+          if constexpr (utilities::is_applicable<ReportTransition,state_type,void>::value)
+          {
+            report_transition(s1);
+          }
+          else
+          {
+            if (m_options.rewrite_actions)
+            {
+              lps::multi_action a=rewrite_action(summand.multi_action,sigma,rewr);
+              report_transition(a,s1);
+            }
+            else
+            {
+              report_transition(summand.multi_action,s1);
+            }
+          }
         }
       }
       if (!m_recursive)
@@ -626,6 +714,7 @@ class explorer: public abortable
                                    )
     {
       data::data_expression condition;   // This variable is used often, and it is time consuming to declare it too often.
+      state_type state_;                  // The same holds for this variable. 
       std::list<transition> transitions;
       data::add_assignments(sigma, m_process_parameters, s);
       for (const explorer_summand& summand: regular_summands)
@@ -636,6 +725,7 @@ class explorer: public abortable
           sigma,
           rewr,
           condition,
+          state_,
           enumerator,
           id_generator,
           [&](const lps::multi_action& a, const state_type& s1)
@@ -648,8 +738,8 @@ class explorer: public abortable
                 return;
               }
               const data::data_expression& t1 = a.has_time() ? a.time() : t;
-              state s1_at_t1 = make_timed_state(s1, t1);
-              transitions.emplace_back(a, s1_at_t1);
+              make_timed_state(state_, s1, t1);
+              transitions.emplace_back(a, state_);
             }
             else
             {
@@ -674,6 +764,7 @@ class explorer: public abortable
     )
     {
       data::data_expression condition; 
+      state_type state_;
       std::vector<state> result;
       data::add_assignments(sigma, m_process_parameters, s0);
       for (const explorer_summand& summand: summands)
@@ -684,9 +775,11 @@ class explorer: public abortable
           sigma,
           rewr,
           condition,
+          state_,
           enumerator,
           id_generator,
-          [&](const lps::multi_action& /* a */, const state& s1)
+          // [&](const lps::multi_action& /* a */, const state& s1) OLD. Calculates transitions, that are not used. 
+          [&](const state& s1)
           {
             result.push_back(s1);
           }
@@ -790,11 +883,11 @@ class explorer: public abortable
     ~explorer() = default;
 
     // Returns the concatenation of s and [t]
-    state make_timed_state(const state& s, const data::data_expression& t) const
+    void make_timed_state(state& result, const state& s, const data::data_expression& t) const
     {
       std::copy(s.begin(), s.end(), timed_state.begin());
       timed_state.back() = t;
-      return state(timed_state.begin(), m_n + 1);
+      lps::make_state(result, timed_state.begin(), m_n + 1);
     }
 
     state_type make_state(const state& s) const
@@ -844,7 +937,8 @@ class explorer: public abortable
       data::data_specification thread_data_specification = m_global_lpsspec.data(); /// XXXX Nodig??
       data::enumerator_algorithm<> thread_enumerator(thread_rewr, thread_data_specification, thread_rewr, thread_id_generator, false);
       state current_state;
-      data::data_expression condition;  // The condition is used often, and it is effective not to declare it too often. 
+      data::data_expression condition;  // The condition is used often, and it is effective not to declare it whenever it is used.
+      state_type state_;                 // The same holds for state.
       while (number_of_active_processes>0)
       {
         if (m_options.number_of_threads>0) m_exclusive_state_access.lock();
@@ -863,6 +957,7 @@ class explorer: public abortable
               thread_sigma,
               thread_rewr,
               condition,
+              state_,
               thread_enumerator,
               thread_id_generator,
               [&](const lps::multi_action& a, const state_type& s1)
@@ -910,10 +1005,10 @@ class explorer: public abortable
                     { 
                       const data::data_expression& t = current_state[m_n];
                       const data::data_expression& t1 = a.has_time() ? a.time() : t;
-                      state s1_at_t1 = make_timed_state(s1, t1);
-                      s1_index = discovered.insert(s1_at_t1).first;
-                      discover_state(s1_at_t1, s1_index);
-                      todo->insert(s1_at_t1);
+                      make_timed_state(state_, s1, t1);
+                      s1_index = discovered.insert(state_).first;
+                      discover_state(state_, s1_index);
+                      todo->insert(state_);
                     } 
                     else
                     { 
@@ -1060,18 +1155,18 @@ class explorer: public abortable
       state_type s0;
       if constexpr (Stochastic)
       {
-        s0 = compute_stochastic_state(m_initial_distribution, m_initial_state, m_global_sigma, m_global_rewr, m_global_enumerator);
+        compute_stochastic_state(s0, m_initial_distribution, m_initial_state, m_global_sigma, m_global_rewr, m_global_enumerator);
       }
       else
       {
-        s0 = compute_state(m_initial_state,m_global_sigma, m_global_rewr);
+        compute_state(s0,m_initial_state,m_global_sigma, m_global_rewr);
         if (!m_confluent_summands.empty())
         {
           s0 = find_representative(s0, m_confluent_summands, m_global_sigma, m_global_rewr, m_global_enumerator, m_global_id_generator);
         }
         if constexpr (Timed)
         {
-          s0 = make_timed_state(s0, real_zero());
+          make_timed_state(s0, s0, real_zero());
         }
       }
       generate_state_space(recursive, s0, m_regular_summands, m_confluent_summands, m_discovered, discover_state, 
@@ -1090,6 +1185,7 @@ class explorer: public abortable
       std::vector<std::pair<lps::multi_action, state_type>> result;
       data::add_assignments(sigma, m_process_parameters, d0);
       data::data_expression condition;
+      state_type state;
       for (const explorer_summand& summand: m_regular_summands)
       {
         generate_transitions(
@@ -1098,6 +1194,7 @@ class explorer: public abortable
           sigma,
           rewr,
           condition,
+          state,
           enumerator,
           id_generator,
           [&](const lps::multi_action& a, const state_type& d1)
@@ -1125,7 +1222,8 @@ std::cerr << "A GLOBAL REWRITER IS INVOKED. HOPEFULLY NOT IN A PARALLEL THREAD\n
               data::mutable_indexed_substitution<>& sigma,
               data::rewriter& rewr)
     {
-      state d0 = compute_state(init,sigma,rewr);
+      state d0;
+      compute_state(d0,init,sigma,rewr);
       return generate_transitions(d0);
     }
 
@@ -1136,11 +1234,12 @@ std::cerr << "A GLOBAL REWRITER IS INVOKED. HOPEFULLY NOT IN A PARALLEL THREAD\n
                 data::mutable_indexed_substitution<>& sigma,
                 data::rewriter& rewr,
                 data::data_expression& condition,
+                state_type& d0,
                 data::enumerator_algorithm<>& enumerator,
                 data::enumerator_identifier_generator& id_generator)
     {
       data::data_expression_list process_parameter_undo = process_parameter_values(sigma);
-      state d0 = compute_state(init,sigma,rewr);
+      compute_state(d0,init,sigma,rewr);
       std::vector<std::pair<lps::multi_action, state_type>> result;
       data::add_assignments(sigma, m_process_parameters, d0);
       generate_transitions(
@@ -1149,6 +1248,7 @@ std::cerr << "A GLOBAL REWRITER IS INVOKED. HOPEFULLY NOT IN A PARALLEL THREAD\n
         sigma,
         rewr,
         condition,
+        d0,
         enumerator,
         id_generator,
         [&](const lps::multi_action& a, const state_type& d1)
@@ -1215,7 +1315,8 @@ std::cerr << "DFS EXPLORATION NOT THREAD SAFE\n";
           {
             const data::data_expression& t = s0[m_n];
             const data::data_expression& t1 = a.has_time() ? a.time() : t;
-            state s1_at_t1 = make_timed_state(s1, t1);
+            state s1_at_t1;
+            make_timed_state(s1_at_t1, s1, t1);
             discovered.insert(s1_at_t1);
           }
           else
@@ -1259,7 +1360,8 @@ std::cerr << "DFS EXPLORATION NOT THREAD SAFE\n";
       std::unordered_set<state> gray;
       std::unordered_set<state> discovered;
 
-      state s0 = compute_state(m_initial_state, m_global_sigma, m_global_rewr);
+      state s0;
+      compute_state(s0, m_initial_state, m_global_sigma, m_global_rewr);
       if (!m_confluent_summands.empty())
       {
         s0 = find_representative(s0, m_confluent_summands, m_global_sigma, m_global_rewr, m_global_enumerator, m_global_id_generator);
@@ -1329,7 +1431,8 @@ std::cerr << "DFS EXPLORATION NOT THREAD SAFE\n";
             {
               const data::data_expression& t = (*s)[m_n];
               const data::data_expression& t1 = a.has_time() ? a.time() : t;
-              state s1_at_t1 = make_timed_state(s1, t1);
+              state s1_at_t1;
+              make_timed_state(s1_at_t1, s1, t1);
               discovered.insert(s1_at_t1);
               discover_state(s1_at_t1);
             }
@@ -1382,7 +1485,8 @@ std::cerr << "DFS EXPLORATION NOT THREAD SAFE\n";
       m_recursive = recursive;
       std::unordered_set<state> discovered;
 
-      state s0 = compute_state(m_initial_state,m_global_sigma, m_global_rewr);
+      state s0;
+      compute_state(s0,m_initial_state,m_global_sigma, m_global_rewr);
       if (!m_confluent_summands.empty())
       {
         s0 = find_representative(s0, m_confluent_summands, m_global_sigma, m_global_rewr, m_global_enumerator, m_global_id_generator);

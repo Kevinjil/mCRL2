@@ -22,29 +22,33 @@ namespace atermpp::detail
 
 /// \brief Provides safe storage of unprotected_aterm instances in a container by marking
 ///        them during garbage collection.
-class aterm_container
+class _aterm_container
 {
 public:
-  inline aterm_container();
-  virtual inline ~aterm_container();
+  inline _aterm_container();
+  virtual inline ~_aterm_container();
 
   /// \brief Ensure that all the terms in the containers.
-  virtual void mark(std::stack<std::reference_wrapper<detail::_aterm>>& todo) const = 0;
+  virtual inline void mark(std::stack<std::reference_wrapper<detail::_aterm>>& /* todo*/) const
+  {
+    // Nothing needs to be done, as this container is not yet in use, 
+    // as otherwise an override would be called. 
+  }
 
   /// \brief Copy constructor
-  inline aterm_container(const aterm_container& c);
+  inline _aterm_container(const _aterm_container& c);
 
   /// \brief Move constructor
-  inline aterm_container(aterm_container&& c);
+  inline _aterm_container(_aterm_container&& c);
 
   /// \brief Assignment This may have to be redefined in due time. 
-  aterm_container& operator=(const aterm_container& )
+  _aterm_container& operator=(const _aterm_container& )
   {
     return *this;
   }
 
   /// \brief Move assignment
-  aterm_container& operator=(aterm_container&& )
+  _aterm_container& operator=(_aterm_container&& )
   {
     return *this;
   } 
@@ -83,11 +87,66 @@ struct is_reference_aterm : public is_reference_aterm_helper<typename std::decay
 template<class T, typename Type >
 class reference_aterm
 {
-  reference_aterm() noexcept = default;
-  reference_aterm(const T& other) = delete;
-  reference_aterm(T&& other) = delete;
-  T& operator=(const T& other) = delete;
-  T& operator=(T&& other) = delete;
+protected:
+  typedef typename std::decay<T>::type T_type;
+  T_type m_t;
+public:
+  reference_aterm() = default;
+
+  reference_aterm(const T& other) noexcept
+   : m_t(other)
+  { }
+ 
+  template <class... Args>
+  reference_aterm(Args&&... args) noexcept
+   : m_t(std::forward<Args>(args)...)
+  { }
+ 
+  template <class... Args>
+  reference_aterm(const Args&... args) noexcept
+   : m_t(args...)
+  { }
+ 
+  reference_aterm(T_type&& other) noexcept
+   : m_t(std::forward(other))
+  {}
+
+  const T& operator=(const T& other) noexcept
+  {
+    static_assert(std::is_base_of<aterm, T>::value);
+    m_t=other;
+    return m_t;
+  }
+
+  const T& operator=(T&& other) noexcept
+  {
+    static_assert(std::is_base_of<aterm, T>::value);
+    m_t = std::forward(other);
+    return m_t;
+  }
+
+  /// Converts implicitly to a protected term of type T.
+  operator T&()
+  {
+    return m_t;
+  }
+
+  operator const T&() const
+  {
+    return m_t;
+  }
+
+  /// For types that are not a std::pair, or a type convertible to an aterm
+  /// it is necessary that a dedicated mark function is provided that calls mark_term
+  /// on all aterm types in the class T, when this class is stored in an atermpp container.
+  /// See below for an example, where the code is given for pairs, aterms and built in types.
+  /// The container is traversed during garbage collection, such that all terms in these
+  /// containers are protected individually, without putting them all explicitly in 
+  /// protection sets. 
+  void mark(std::stack<std::reference_wrapper<detail::_aterm>>& todo) const
+  {
+    m_t.mark(todo);
+  }
 
 };
 
@@ -98,10 +157,9 @@ class reference_aterm < T, typename std::enable_if<std::is_fundamental<typename 
 {
 protected:
   typedef typename std::decay<T>::type T_type;
+  T_type m_t;
 
 public:
-
-  T_type m_t;
 
   /// \brief Default constructor.
   reference_aterm() noexcept = default;
@@ -124,7 +182,7 @@ public:
   const T& operator=(T&& other) noexcept
   {
     static_assert(std::is_base_of<aterm, T>::value);
-    m_t = other;
+    m_t = std::move(other);
     return m_t;
   }
 
@@ -169,11 +227,12 @@ public:
   { }
 
   reference_aterm(unprotected_aterm&& other) noexcept
+   : unprotected_aterm(detail::address(other))
   {
-    m_term = detail::address(other);
   }
 
   const reference_aterm& operator=(const unprotected_aterm& other) noexcept;
+
   const reference_aterm& operator=(unprotected_aterm&& other) noexcept;
 
   /// Converts implicitly to a protected term of type T.
@@ -289,8 +348,8 @@ public:
 
   reference_aterm& operator=(reference_aterm&& other)
   {
-    super::first = other.first;
-    super::second = other.second;
+    super::first = std::move(other.first);
+    super::second = std::move(other.second);
     return *this;
   }
 
@@ -373,7 +432,7 @@ private:
 };
 
 template<typename Container>
-class generic_aterm_container : public aterm_container
+class generic_aterm_container : public _aterm_container
 {
 public:
   /// \brief Constructor
@@ -395,19 +454,19 @@ public:
   // Container& container() { return m_container; }
   // const Container& container() const { return m_container; }
 
-  void mark(std::stack<std::reference_wrapper<detail::_aterm>>& todo) const override
+  virtual void inline mark(std::stack<std::reference_wrapper<detail::_aterm>>& todo) const override
   {
     for (const typename Container::value_type& element: m_container) 
     {
-      static_assert(is_reference_aterm<reference_aterm<typename Container::value_type> >::value,"TEST1");
+      static_assert(is_reference_aterm<reference_aterm<typename Container::value_type> >::value);
       if constexpr (is_reference_aterm<typename Container::value_type>::value)
       {
-        static_assert(is_reference_aterm<typename Container::value_type >::value,"TEST2");
+        static_assert(is_reference_aterm<typename Container::value_type >::value);
         element.mark(todo);
       }
       else
       {
-        static_assert(!is_reference_aterm<typename Container::value_type >::value,"TEST3");
+        static_assert(!is_reference_aterm<typename Container::value_type >::value);
         reference_aterm<typename Container::value_type>(element).mark(todo);
       }
     }
