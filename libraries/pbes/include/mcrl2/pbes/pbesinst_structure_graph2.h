@@ -12,6 +12,7 @@
 #ifndef MCRL2_PBES_PBESINST_STRUCTURE_GRAPH2_H
 #define MCRL2_PBES_PBESINST_STRUCTURE_GRAPH2_H
 
+#include "mcrl2/atermpp/standard_containers/deque.h"
 #include "mcrl2/pbes/pbesinst_fatal_attractors.h"
 #include "mcrl2/pbes/pbesinst_find_loops.h"
 #include "mcrl2/pbes/pbesinst_partial_solve.h"
@@ -408,7 +409,7 @@ class pbesinst_structure_graph_algorithm2: public pbesinst_structure_graph_algor
       // new_todo_list := new_todo \cap (todo U irrelevant)
       // N.B. An attempt is made to preserve the order of the current todo list, to not
       // disturb breadth first and depth first search.
-      std::deque<propositional_variable_instantiation> new_todo_list;
+      atermpp::deque<propositional_variable_instantiation> new_todo_list;
       for (const propositional_variable_instantiation& X: todo.irrelevant_elements())
       {
         if (contains(new_todo, X))
