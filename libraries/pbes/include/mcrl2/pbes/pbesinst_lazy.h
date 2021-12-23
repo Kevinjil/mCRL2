@@ -232,10 +232,12 @@ class pbesinst_lazy_algorithm
       return p;
     }
 
-    static pbes_expression rewrite_true_false(const fixpoint_symbol& symbol,
-                                       const propositional_variable_instantiation& X,
-                                       const pbes_expression& psi
-                                      )
+    static void rewrite_true_false(
+        pbes_expression& result,
+        const fixpoint_symbol& symbol,
+        const propositional_variable_instantiation& X,
+        const pbes_expression& psi
+      )
     {
       bool changed = false;
       pbes_expression value;
@@ -247,24 +249,30 @@ class pbesinst_lazy_algorithm
       {
         value = true_();
       }
-      pbes_expression result = replace_propositional_variables(psi, [&](const propositional_variable_instantiation& Y) -> pbes_expression {
-                                                                   if (Y == X)
-                                                                   {
-                                                                     changed = true;
-                                                                     return value;
-                                                                   }
-                                                                   return Y;
-                                                               }
+
+      auto simplify = [&](pbes_expression& result, pbes_expression exp) -> void {
+        if (changed) {
+          simplify_rewriter simplify;
+          result = simplify(exp);
+          return;
+        }
+        result = exp;
+      };
+
+      simplify(
+        result,
+        replace_propositional_variables(
+          psi,
+          [&](const propositional_variable_instantiation& Y) -> pbes_expression {
+              if (Y == X)
+              {
+                changed = true;
+                return value;
+              }
+              return Y;
+          }
+        )
       );
-      if (changed)
-      {
-        simplify_rewriter simplify;
-        return simplify(result);
-      }
-      else
-      {
-        return result;
-      }
     }
 
     data::rewriter construct_rewriter(const pbes& pbesspec)
@@ -287,7 +295,7 @@ class pbesinst_lazy_algorithm
     /// \param p The pbes used in the exploration algorithm.
     /// \param rewrite_strategy A strategy for the data rewriter.
     /// \param search_strategy The search strategy used to explore the pbes, typically depth or breadth first.
-    /// \param optimization An indication of the optimisation level. 
+    /// \param optimization An indication of the optimisation level.
     explicit pbesinst_lazy_algorithm(
       const pbessolve_options& options,
       const pbes& p
@@ -314,19 +322,17 @@ class pbesinst_lazy_algorithm
     virtual void on_end_while_loop()
     { }
 
-    propositional_variable_instantiation next_todo()
+    void next_todo(propositional_variable_instantiation& result)
     {
       if (m_options.exploration_strategy == breadth_first)
       {
-        auto X_e = todo.front();
+        result = todo.front();
         todo.pop_front();
-        return X_e;
       }
       else
       {
-        auto X_e = todo.back();
+        result = todo.back();
         todo.pop_back();
-        return X_e;
       }
     }
 
@@ -336,12 +342,21 @@ class pbesinst_lazy_algorithm
     }
 
     // rewrite the right hand side of the equation X = psi
-    virtual pbes_expression rewrite_psi(const fixpoint_symbol& symbol,
-                                        const propositional_variable_instantiation& X,
-                                        const pbes_expression& psi
-                                       )
+    virtual void rewrite_psi(
+      pbes_expression& result,
+      const fixpoint_symbol& symbol,
+      const propositional_variable_instantiation& X,
+      const pbes_expression& psi
+    )
     {
-      return m_options.optimization >= 1 ? rewrite_true_false(symbol, X, psi) : psi;
+      if (m_options.optimization >= 1)
+      {
+        rewrite_true_false(result, symbol, X, psi);
+      }
+      else
+      {
+        result = psi;
+      }
     }
 
     virtual bool solution_found(const propositional_variable_instantiation& /* init */) const
@@ -360,6 +375,10 @@ class pbesinst_lazy_algorithm
       mCRL2log(log::verbose) << "Start thread " << process_number << ".\n";
       R.thread_initialise();
 
+      // Local variables to store results, to prevent unneccessary assignments of aterms
+      propositional_variable_instantiation X_e;
+      pbes_expression psi_e;
+
       while (number_of_active_processes > 0) {
         if (m_options.number_of_threads>0) m_exclusive_todo_access.lock();
         while (!todo->elements().empty() && !m_must_abort)
@@ -368,7 +387,7 @@ class pbesinst_lazy_algorithm
           mCRL2log(log::status) << status_message(m_iteration_count);
           detail::check_bes_equation_limit(m_iteration_count);
 
-          propositional_variable_instantiation X_e = next_todo();
+          next_todo(X_e);
 
           if (m_options.number_of_threads>0) m_exclusive_todo_access.unlock();
 
@@ -376,12 +395,10 @@ class pbesinst_lazy_algorithm
           const pbes_equation& eqn = m_pbes.equations()[index];
           const auto& phi = eqn.formula();
           data::add_assignments(sigma, eqn.variable().parameters(), X_e.parameters());
-          pbes_expression psi_e = R(phi, sigma);
+
+          rewrite_psi(psi_e, eqn.symbol(), X_e, R(phi, sigma));
           R.clear_identifier_generator();
           data::remove_assignments(sigma, eqn.variable().parameters());
-
-          // optional step
-          psi_e = rewrite_psi(eqn.symbol(), X_e, psi_e);
 
           // report the generated equation
           std::size_t k = m_equation_index.rank(X_e.name());
@@ -392,7 +409,7 @@ class pbesinst_lazy_algorithm
           if (m_options.number_of_threads>0) m_exclusive_graph_access.unlock();
 
           std::set<propositional_variable_instantiation> occ = find_propositional_variable_instantiations(psi_e);
-          
+
           if (m_options.number_of_threads>0) m_exclusive_todo_access.lock();
 
           todo->insert(occ.begin(), occ.end(), discovered);
@@ -406,9 +423,9 @@ class pbesinst_lazy_algorithm
         }
         if (m_options.number_of_threads>0) m_exclusive_todo_access.unlock();
 
-        // Check whether all processes are ready. If so the number_of_active_processes becomes 0. 
+        // Check whether all processes are ready. If so the number_of_active_processes becomes 0.
         // Otherwise, this thread becomes active again, and tries to see whether the todo buffer is
-        // not empty, to take up more work. 
+        // not empty, to take up more work.
         number_of_active_processes--;
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         if (number_of_active_processes>0)

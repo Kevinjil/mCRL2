@@ -470,22 +470,27 @@ class pbesinst_structure_graph_algorithm2: public pbesinst_structure_graph_algor
     {}
 
     // Optimization 2 is implemented by overriding the function rewrite_psi.
-    pbes_expression rewrite_psi(const fixpoint_symbol& symbol,
-                                const propositional_variable_instantiation& X,
-                                const pbes_expression& psi
-                               ) override
+    void rewrite_psi(
+      pbes_expression& result,
+      const fixpoint_symbol& symbol,
+      const propositional_variable_instantiation& X,
+      const pbes_expression& psi
+    ) override
     {
-      auto result = Rplus(super::rewrite_psi(symbol, X, psi));
-      b = result.b;
+      super::rewrite_psi(result, symbol, X, psi);
+      Rplus_traverser::stack_element test = Rplus(result);
+      b = test.b;
       if (is_true(b))
       {
-        return result.g0;
+        result = test.g0;
+        return;
       }
       else if (is_false(b))
       {
-        return result.g1;
+        result = test.g1;
+        return;
       }
-      return result.f;
+      result = test.f;
     }
 
     void on_report_equation(const propositional_variable_instantiation& X, const pbes_expression& psi, std::size_t k) override
@@ -560,7 +565,7 @@ class pbesinst_structure_graph_algorithm2: public pbesinst_structure_graph_algor
         }
       }
       else if (m_options.optimization == 8 && (m_options.aggressive || find_loops_guard(m_iteration_count)))
-      {        
+      {
         mCRL2log(log::verbose) << "start partial solving\n"; report = true;
 
         simple_structure_graph G(m_graph_builder.vertices());
