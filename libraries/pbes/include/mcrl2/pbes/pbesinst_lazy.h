@@ -201,6 +201,7 @@ class pbesinst_lazy_algorithm
 
     // Mutexes
     std::mutex m_exclusive_todo_access;
+    std::mutex m_exclusive_graph_access;
 
     volatile bool m_must_abort = false;
 
@@ -385,7 +386,10 @@ class pbesinst_lazy_algorithm
           // report the generated equation
           std::size_t k = m_equation_index.rank(X_e.name());
           mCRL2log(log::debug) << "generated equation " << X_e << " = " << psi_e << " with rank " << k << std::endl;
+
+          if (m_options.number_of_threads>0) m_exclusive_graph_access.lock();
           on_report_equation(X_e, psi_e, k);
+          if (m_options.number_of_threads>0) m_exclusive_graph_access.unlock();
 
           std::set<propositional_variable_instantiation> occ = find_propositional_variable_instantiations(psi_e);
           
