@@ -11,6 +11,7 @@
 
 #include <thread>
 
+#include "mcrl2/atermpp/standard_containers/deque.h"
 #include "mcrl2/data/substitution_utility.h"
 #include "mcrl2/pbes/detail/bes_equation_limit.h"
 #include "mcrl2/pbes/detail/instantiate_global_variables.h"
@@ -38,7 +39,7 @@ class pbesinst_lazy_todo
 {
   protected:
     std::unordered_set<propositional_variable_instantiation> irrelevant;
-    std::deque<propositional_variable_instantiation> todo;
+    atermpp::deque<propositional_variable_instantiation> todo;
 
     // checks some invariants on the internal state
     bool check_invariants() const
@@ -76,7 +77,7 @@ class pbesinst_lazy_todo
       return todo.size();
     }
 
-    const std::deque<propositional_variable_instantiation>& elements() const
+    const atermpp::deque<propositional_variable_instantiation>& elements() const
     {
       return todo;
     }
@@ -135,7 +136,7 @@ class pbesinst_lazy_todo
       }
     }
 
-    void set_todo(std::deque<propositional_variable_instantiation>& new_todo)
+    void set_todo(atermpp::deque<propositional_variable_instantiation>& new_todo)
     {
       using utilities::detail::contains;
       std::size_t size_before = todo.size() + irrelevant.size();
