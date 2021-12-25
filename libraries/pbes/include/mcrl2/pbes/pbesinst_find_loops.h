@@ -71,9 +71,10 @@ bool find_loop(const simple_structure_graph& G,
   return false;
 }
 
+template <class Container>
 inline
 void find_loops(const simple_structure_graph& G,
-                const std::unordered_set<propositional_variable_instantiation>& discovered,
+                Container& discovered,
                 const pbesinst_lazy_todo& todo,
                 std::array<vertex_set, 2>& S,
                 std::array<strategy_vector, 2>& tau,

@@ -180,6 +180,14 @@ public:
   { 
     return m_keys.size();
   }
+
+  /// \brief Check for elements in the indexed set.
+  /// \return True if there are no elements in the indexed set.
+  /// \threadsafe
+  bool empty() const
+  {
+    return m_keys.empty();
+  }
 };
 
 } // end namespace utilities

@@ -10,8 +10,10 @@
 /// \brief A lazy algorithm for instantiating a PBES, ported from bes_deprecated.h.
 
 #include <thread>
+#include <boost/range/join.hpp>
 
 #include "mcrl2/atermpp/standard_containers/deque.h"
+#include "mcrl2/atermpp/standard_containers/indexed_set.h"
 #include "mcrl2/data/substitution_utility.h"
 #include "mcrl2/pbes/detail/bes_equation_limit.h"
 #include "mcrl2/pbes/detail/instantiate_global_variables.h"
@@ -92,12 +94,9 @@ class pbesinst_lazy_todo
       return irrelevant;
     }
 
-    std::vector<propositional_variable_instantiation> all_elements() const
+    boost::range::joined_range<const atermpp::deque<mcrl2::pbes_system::propositional_variable_instantiation>, const std::unordered_set<mcrl2::pbes_system::propositional_variable_instantiation>> all_elements() const
     {
-      std::vector<propositional_variable_instantiation> result;
-      result.insert(result.end(), todo.begin(), todo.end());
-      result.insert(result.end(), irrelevant.begin(), irrelevant.end());
-      return result;
+      return boost::join(todo, irrelevant);
     }
 
     void pop_front()
@@ -117,7 +116,7 @@ class pbesinst_lazy_todo
     }
 
     template <typename FwdIter>
-    void insert(FwdIter first, FwdIter last, const std::unordered_set<propositional_variable_instantiation>& discovered)
+    void insert(FwdIter first, FwdIter last, const atermpp::indexed_set<propositional_variable_instantiation>& discovered)
     {
       using utilities::detail::contains;
 
@@ -129,7 +128,7 @@ class pbesinst_lazy_todo
           todo.push_back(*j);
           irrelevant.erase(j);
         }
-        else if (!contains(discovered, *i))
+        else if (discovered.find(*i) == discovered.end()) // TODO: templated contains
         {
           todo.push_back(*i);
         }
@@ -187,7 +186,7 @@ class pbesinst_lazy_algorithm
     pbesinst_lazy_todo todo;
 
     /// \brief The propositional variable instantiations that have been discovered (not necessarily handled).
-    std::unordered_set<propositional_variable_instantiation> discovered;
+    atermpp::indexed_set<propositional_variable_instantiation> discovered;
 
     /// \brief The initial value (after rewriting).
     propositional_variable_instantiation init;
@@ -403,7 +402,7 @@ class pbesinst_lazy_algorithm
 
           // report the generated equation
           std::size_t k = m_equation_index.rank(X_e.name());
-          mCRL2log(log::debug) << "generated equation " << X_e << " = " << psi_e << " with rank " << k << std::endl;
+          mCRL2log(log::debug) << "Thread " << process_number << " generated equation " << X_e << " = " << psi_e << " with rank " << k << std::endl;
 
           if (m_options.number_of_threads>0) m_exclusive_graph_access.lock();
           on_report_equation(X_e, psi_e, k);
@@ -414,7 +413,9 @@ class pbesinst_lazy_algorithm
           if (m_options.number_of_threads>0) m_exclusive_todo_access.lock();
 
           todo->insert(occ.begin(), occ.end(), discovered);
-          discovered.insert(occ.begin(), occ.end());
+          for (auto o : occ) {
+            discovered.insert(o);
+          }
           on_discovered_elements(occ);
 
           if (solution_found(init))
