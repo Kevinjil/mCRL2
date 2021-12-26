@@ -554,6 +554,52 @@ struct add_pbes_expressions: public Builder<Derived>
     return result;
   }
 
+  void make_apply(pbes_system::pbes_expression& result, const pbes_system::pbes_expression& x)
+  {
+    static_cast<Derived&>(*this).enter(x);
+    if (data::is_data_expression(x))
+    {
+      static_cast<Derived&>(*this).apply(result, atermpp::down_cast<data::data_expression>(x));
+    }
+    else if (pbes_system::is_propositional_variable_instantiation(x))
+    {
+      static_cast<Derived&>(*this).apply(result, atermpp::down_cast<pbes_system::propositional_variable_instantiation>(x));
+    }
+    else if (pbes_system::is_not(x))
+    {
+      static_cast<Derived&>(*this).apply(result, atermpp::down_cast<pbes_system::not_>(x));
+    }
+    else if (pbes_system::is_and(x))
+    {
+      static_cast<Derived&>(*this).apply(result, atermpp::down_cast<pbes_system::and_>(x));
+    }
+    else if (pbes_system::is_or(x))
+    {
+      static_cast<Derived&>(*this).apply(result, atermpp::down_cast<pbes_system::or_>(x));
+    }
+    else if (pbes_system::is_imp(x))
+    {
+      static_cast<Derived&>(*this).apply(result, atermpp::down_cast<pbes_system::imp>(x));
+    }
+    else if (pbes_system::is_forall(x))
+    {
+      static_cast<Derived&>(*this).apply(result, atermpp::down_cast<pbes_system::forall>(x));
+    }
+    else if (pbes_system::is_exists(x))
+    {
+      static_cast<Derived&>(*this).apply(result, atermpp::down_cast<pbes_system::exists>(x));
+    }
+    else if (data::is_variable(x))
+    {
+      static_cast<Derived&>(*this).apply(result, atermpp::down_cast<data::variable>(x));
+    }
+    else if (data::is_untyped_data_parameter(x))
+    {
+      static_cast<Derived&>(*this).apply(result, atermpp::down_cast<data::untyped_data_parameter>(x));
+    }
+    static_cast<Derived&>(*this).leave(x);
+  }
+
   pbes_system::pbes_expression apply(const pbes_system::pbes_expression& x)
   {
     static_cast<Derived&>(*this).enter(x);

@@ -396,7 +396,9 @@ class pbesinst_lazy_algorithm
           const auto& phi = eqn.formula();
           data::add_assignments(sigma, eqn.variable().parameters(), X_e.parameters());
 
+          if (m_options.number_of_threads>0) m_exclusive_graph_access.lock();
           rewrite_psi(psi_e, eqn.symbol(), X_e, R(phi, sigma));
+          if (m_options.number_of_threads>0) m_exclusive_graph_access.unlock();
           R.clear_identifier_generator();
           data::remove_assignments(sigma, eqn.variable().parameters());
 
