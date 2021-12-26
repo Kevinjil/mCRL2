@@ -389,7 +389,7 @@ class pbesinst_lazy_algorithm
 
           next_todo(X_e);
 
-          if (m_options.number_of_threads>0) m_exclusive_todo_access.unlock();
+          // if (m_options.number_of_threads>0) m_exclusive_todo_access.unlock();
 
           std::size_t index = m_equation_index.index(X_e.name());
           const pbes_equation& eqn = m_pbes.equations()[index];
@@ -410,7 +410,7 @@ class pbesinst_lazy_algorithm
 
           std::set<propositional_variable_instantiation> occ = find_propositional_variable_instantiations(psi_e);
 
-          if (m_options.number_of_threads>0) m_exclusive_todo_access.lock();
+          // if (m_options.number_of_threads>0) m_exclusive_todo_access.lock();
 
           todo->insert(occ.begin(), occ.end(), discovered);
           for (auto o : occ) {
@@ -422,6 +422,12 @@ class pbesinst_lazy_algorithm
           {
             m_must_abort = true;
           }
+
+          // Run sequential.
+          // Force thread switch by sleeping the current thread long enough for another thread to start.
+          if (m_options.number_of_threads>0) m_exclusive_todo_access.unlock();
+          std::this_thread::sleep_for(std::chrono::milliseconds(150));
+          if (m_options.number_of_threads>0) m_exclusive_todo_access.lock();
         }
         if (m_options.number_of_threads>0) m_exclusive_todo_access.unlock();
 
