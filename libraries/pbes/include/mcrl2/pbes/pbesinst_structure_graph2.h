@@ -75,7 +75,7 @@ class pbesinst_structure_graph_algorithm2: public pbesinst_structure_graph_algor
     std::array<strategy_vector, 2> tau;
     std::array<detail::computation_guard, 2> S_guard;
 
-    pbes_expression b; // to store the result of the Rplus computation
+    std::map<pbes_expression, pbes_expression> b; // to store the result of the Rplus computation
     detail::computation_guard find_loops_guard;
     detail::computation_guard fatal_attractors_guard;
     detail::periodic_guard reset_guard;
@@ -480,13 +480,13 @@ class pbesinst_structure_graph_algorithm2: public pbesinst_structure_graph_algor
     {
       super::rewrite_psi(result, symbol, X, psi);
       Rplus_traverser::stack_element test = Rplus(result);
-      b = test.b;
-      if (is_true(b))
+      b.insert({result, test.b});
+      if (is_true(test.b))
       {
         result = test.g0;
         return;
       }
-      else if (is_false(b))
+      else if (is_false(test.b))
       {
         result = test.g1;
         return;
@@ -503,11 +503,15 @@ class pbesinst_structure_graph_algorithm2: public pbesinst_structure_graph_algor
       S[1].resize(m_graph_builder.extent());
 
       auto u = m_graph_builder.find_vertex(X);
-      if (is_true(b))
+      if (b.find(psi) == b.end()) {
+        exit(1);
+      }
+      pbes_expression cb = b[psi];
+      if (is_true(cb))
       {
         S[0].insert(u);
       }
-      else if (is_false(b))
+      else if (is_false(cb))
       {
         S[1].insert(u);
       }
