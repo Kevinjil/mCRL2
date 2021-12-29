@@ -315,7 +315,7 @@ class pbesinst_lazy_algorithm
     { }
 
     /// \brief This function is called when new elements are added to discovered.
-    virtual void on_discovered_elements(const std::set<propositional_variable_instantiation>& /* elements */)
+    virtual void on_discovered_elements(const atermpp::indexed_set<propositional_variable_instantiation>& /* elements */)
     { }
 
     /// \brief This function is called right after the while loop is finished.
@@ -375,55 +375,78 @@ class pbesinst_lazy_algorithm
       mCRL2log(log::verbose) << "Start thread " << process_number << ".\n";
       R.thread_initialise();
 
+      // Reduce locking by having a thread-local queue
+      static std::size_t QUEUE_SIZE = 2;
+      atermpp::deque<propositional_variable_instantiation> X(0);
+      atermpp::deque<pbes_expression> Psi(0);
+      atermpp::indexed_set<propositional_variable_instantiation> Discovered(0);
+      std::size_t queueSize;
+
       // Local variables to store results, to prevent unneccessary assignments of aterms
       propositional_variable_instantiation X_e;
       pbes_expression psi_e;
 
       while (number_of_active_processes > 0) {
         if (m_options.number_of_threads>0) m_exclusive_todo_access.lock();
-        while (!todo->elements().empty() && !m_must_abort)
+        while (!todo->elements().empty() && !m_must_abort) {
+        for (queueSize = 0; queueSize < QUEUE_SIZE && !todo->elements().empty(); ++queueSize) {
+          next_todo(X_e);
+          X.push_back(X_e);
+        }
+        if (m_options.number_of_threads>0) m_exclusive_todo_access.unlock();
+
+        for (std::size_t i = 0; i < queueSize && !m_must_abort; ++i)
         {
           ++m_iteration_count;
           mCRL2log(log::status) << status_message(m_iteration_count);
           detail::check_bes_equation_limit(m_iteration_count);
 
-          next_todo(X_e);
-
-          if (m_options.number_of_threads>0) m_exclusive_todo_access.unlock();
+          X_e = X.front();
+          X.pop_front();
 
           std::size_t index = m_equation_index.index(X_e.name());
           const pbes_equation& eqn = m_pbes.equations()[index];
           const auto& phi = eqn.formula();
           data::add_assignments(sigma, eqn.variable().parameters(), X_e.parameters());
 
-          if (m_options.number_of_threads>0) m_exclusive_graph_access.lock();
+          // if (m_options.number_of_threads>0) m_exclusive_graph_access.lock();
           rewrite_psi(psi_e, eqn.symbol(), X_e, R(phi, sigma));
-          if (m_options.number_of_threads>0) m_exclusive_graph_access.unlock();
+          // if (m_options.number_of_threads>0) m_exclusive_graph_access.unlock();
           R.clear_identifier_generator();
           data::remove_assignments(sigma, eqn.variable().parameters());
+
+          for (auto var : find_propositional_variable_instantiations(psi_e)) {
+            Discovered.insert(var);
+          }
+
+          Psi.push_back(psi_e);
+        }
+
+        if (m_options.number_of_threads>0) m_exclusive_graph_access.lock();
+        if (m_options.number_of_threads>0) m_exclusive_todo_access.lock();
+        for (std::size_t i = 0; i < queueSize && !m_must_abort; ++i)
+        {
+          psi_e = Psi.front();
+          Psi.pop_front();
 
           // report the generated equation
           std::size_t k = m_equation_index.rank(X_e.name());
           mCRL2log(log::debug) << "Thread " << process_number << " generated equation " << X_e << " = " << psi_e << " with rank " << k << std::endl;
 
-          if (m_options.number_of_threads>0) m_exclusive_graph_access.lock();
           on_report_equation(X_e, psi_e, k);
-          if (m_options.number_of_threads>0) m_exclusive_graph_access.unlock();
+        }
+        todo->insert(Discovered.begin(), Discovered.end(), discovered);
+        for (auto o : Discovered) {
+          discovered.insert(o);
+        }
+        on_discovered_elements(Discovered);
+        Discovered.clear();
 
-          std::set<propositional_variable_instantiation> occ = find_propositional_variable_instantiations(psi_e);
-
-          if (m_options.number_of_threads>0) m_exclusive_todo_access.lock();
-
-          todo->insert(occ.begin(), occ.end(), discovered);
-          for (auto o : occ) {
-            discovered.insert(o);
-          }
-          on_discovered_elements(occ);
-
-          if (solution_found(init))
-          {
-            m_must_abort = true;
-          }
+        if (solution_found(init))
+        {
+          m_must_abort = true;
+        }
+        if (m_options.number_of_threads>0) m_exclusive_graph_access.unlock();
         }
         if (m_options.number_of_threads>0) m_exclusive_todo_access.unlock();
 
