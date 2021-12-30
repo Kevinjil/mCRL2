@@ -15,6 +15,7 @@
 #include <iomanip>
 #include <boost/dynamic_bitset.hpp>
 #include <boost/range/adaptor/filtered.hpp>
+#include "mcrl2/atermpp/standard_containers/vector.h"
 #include "mcrl2/core/detail/print_utility.h"
 #include "mcrl2/pbes/pbes.h"
 
@@ -79,21 +80,21 @@ class structure_graph
 
     struct vertex
     {
-      pbes_expression formula;
+      index_type formula;
       decoration_type decoration;
       std::size_t rank;
       std::vector<index_type> predecessors;
       std::vector<index_type> successors;
       mutable index_type strategy;
 
-      explicit vertex(pbes_expression  formula_,
+      explicit vertex(index_type  formula_,
              decoration_type decoration_ = structure_graph::d_none,
              std::size_t rank_ = data::undefined_index(),
              std::vector<index_type> pred_ = std::vector<index_type>(),
              std::vector<index_type> succ_ = std::vector<index_type>(),
              index_type strategy_ = undefined_vertex()
             )
-        : formula(std::move(formula_)),
+        : formula(formula_),
           decoration(decoration_),
           rank(rank_),
           predecessors(std::move(pred_)),
@@ -120,6 +121,7 @@ class structure_graph
 
   protected:
     std::vector<vertex> m_vertices;
+    atermpp::vector<pbes_expression> m_formulas;
     index_type m_initial_vertex = 0;
     boost::dynamic_bitset<> m_exclude;
 
@@ -157,8 +159,9 @@ class structure_graph
   public:
     structure_graph() = default;
 
-    structure_graph(std::vector<vertex>  vertices, index_type initial_vertex, boost::dynamic_bitset<>  exclude)
+    structure_graph(std::vector<vertex> vertices, atermpp::vector<pbes_expression> formulas, index_type initial_vertex, boost::dynamic_bitset<>  exclude)
       : m_vertices(std::move(vertices)),
+        m_formulas(std::move(formulas)),
         m_initial_vertex(initial_vertex),
         m_exclude(std::move(exclude))
     {}
@@ -178,6 +181,11 @@ class structure_graph
       return m_vertices[u].decoration;
     }
 
+    const pbes_expression& formula(index_type u) const
+    {
+      return m_formulas[u];
+    }
+
     std::size_t rank(index_type u) const
     {
       return m_vertices[u].rank;
@@ -186,6 +194,11 @@ class structure_graph
     const std::vector<vertex>& all_vertices() const
     {
       return m_vertices;
+    }
+
+    const atermpp::vector<pbes_expression>& all_formulas() const
+    {
+      return m_formulas;
     }
 
     const std::vector<index_type>& all_predecessors(index_type u) const

@@ -12,7 +12,7 @@
 #ifndef MCRL2_PBES_STRUCTURE_GRAPH_BUILDER_H
 #define MCRL2_PBES_STRUCTURE_GRAPH_BUILDER_H
 
-#include "mcrl2/atermpp/standard_containers/deque.h"
+#include "mcrl2/atermpp/standard_containers/vector.h"
 #include "mcrl2/pbes/pbessolve_vertex_set.h"
 
 namespace mcrl2 {
@@ -58,6 +58,26 @@ struct structure_graph_builder
     return m_graph.m_vertices[u];
   }
 
+  pbes_expression& formula(index_type u)
+  {
+    return m_graph.m_formulas[u];
+  }
+
+  const pbes_expression& formula(index_type u) const
+  {
+    return m_graph.m_formulas[u];
+  }
+
+  atermpp::vector<pbes_expression>& formulas()
+  {
+    return m_graph.m_formulas;
+  }
+
+  const atermpp::vector<pbes_expression>& formulas() const
+  {
+    return m_graph.m_formulas;
+  }
+
   structure_graph::decoration_type decoration(const pbes_expression& x) const
   {
     if (is_true(x))
@@ -86,7 +106,8 @@ struct structure_graph_builder
   index_type create_vertex(const pbes_expression& x)
   {
     assert(m_vertex_map.find(x) == m_vertex_map.end());
-    vertices().emplace_back(x, decoration(x));
+    formulas().push_back(x);
+    vertices().emplace_back(formulas().size() - 1, decoration(x));
     index_type index = vertices().size() - 1;
     m_vertex_map.insert({ x, index });
     return index;
@@ -223,7 +244,7 @@ struct structure_graph_builder
     m_vertex_map.clear();
     for (std::size_t i = 0; i < vertices().size(); i++)
     {
-      m_vertex_map.insert({vertices()[i].formula, i});
+      m_vertex_map.insert({formula(vertices()[i].formula), i});
     }
   }
 };
@@ -234,6 +255,7 @@ struct manual_structure_graph_builder
 
   structure_graph& m_graph;
   std::vector<structure_graph::vertex> m_vertices;
+  atermpp::vector<pbes_expression> m_formulas;
   index_type m_initial_state; // The initial state.
 
   explicit manual_structure_graph_builder(structure_graph& G)
@@ -243,7 +265,8 @@ struct manual_structure_graph_builder
   /// \brief Create a vertex, returns the index of the new vertex
   index_type insert_vertex(bool is_conjunctive, std::size_t rank)
   {
-    m_vertices.emplace_back(pbes_expression(), is_conjunctive ? structure_graph::d_conjunction : structure_graph::d_disjunction, rank);
+    m_formulas.push_back(pbes_expression());
+    m_vertices.emplace_back(m_formulas.size() - 1, is_conjunctive ? structure_graph::d_conjunction : structure_graph::d_disjunction, rank);
     return m_vertices.size() - 1;
   }
 

@@ -383,8 +383,8 @@ class pbesinst_structure_graph_algorithm2: public pbesinst_structure_graph_algor
 
         if (u_.decoration == structure_graph::d_none && u_.successors.empty())
         {
-          assert(is_propositional_variable_instantiation(u_.formula));
-          new_todo.insert(atermpp::down_cast<propositional_variable_instantiation>(u_.formula));
+          assert(is_propositional_variable_instantiation(m_graph_builder.formula(u_.formula)));
+          new_todo.insert(atermpp::down_cast<propositional_variable_instantiation>(m_graph_builder.formula(u_.formula)));
         }
         else
         {
@@ -394,7 +394,7 @@ class pbesinst_structure_graph_algorithm2: public pbesinst_structure_graph_algor
             for (auto v: G.successors(u))
             {
               const auto& v_ = m_graph_builder.vertex(v);
-              const auto& Y = v_.formula;
+              const auto& Y = m_graph_builder.formula(v_.formula);
               if (contains(done1, Y))
               {
                 continue;
