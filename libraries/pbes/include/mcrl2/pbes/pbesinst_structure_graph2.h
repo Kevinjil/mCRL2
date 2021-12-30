@@ -75,7 +75,6 @@ class pbesinst_structure_graph_algorithm2: public pbesinst_structure_graph_algor
     std::array<strategy_vector, 2> tau;
     std::array<detail::computation_guard, 2> S_guard;
 
-    std::map<pbes_expression, pbes_expression> b; // to store the result of the Rplus computation
     detail::computation_guard find_loops_guard;
     detail::computation_guard fatal_attractors_guard;
     detail::periodic_guard reset_guard;
@@ -470,6 +469,16 @@ class pbesinst_structure_graph_algorithm2: public pbesinst_structure_graph_algor
         find_loops_guard(2), fatal_attractors_guard(2)
     {}
 
+    void B(pbes_expression& value, bool set) {
+      static thread_local std::array<pbes_expression, QUEUE_SIZE> b;
+      static thread_local std::size_t i;
+      if (set) {
+        b[i++] = value;
+        return;
+      }
+      value = b[--i];
+    }
+
     // Optimization 2 is implemented by overriding the function rewrite_psi.
     void rewrite_psi(
       pbes_expression& result,
@@ -480,20 +489,18 @@ class pbesinst_structure_graph_algorithm2: public pbesinst_structure_graph_algor
     {
       super::rewrite_psi(result, symbol, X, psi);
       Rplus_traverser::stack_element test = Rplus(result);
+      B(test.b, true);
       if (is_true(test.b))
       {
         result = test.g0;
-        b.insert({result, test.b});
         return;
       }
       else if (is_false(test.b))
       {
         result = test.g1;
-        b.insert({result, test.b});
         return;
       }
       result = test.f;
-      b.insert({result, test.b});
     }
 
     void on_report_equation(const propositional_variable_instantiation& X, const pbes_expression& psi, std::size_t k) override
@@ -505,15 +512,13 @@ class pbesinst_structure_graph_algorithm2: public pbesinst_structure_graph_algor
       S[1].resize(m_graph_builder.extent());
 
       auto u = m_graph_builder.find_vertex(X);
-      if (b.find(psi) == b.end()) {
-        exit(1);
-      }
-      pbes_expression cb = b[psi];
-      if (is_true(cb))
+      pbes_expression b;
+      B(b, false);
+      if (is_true(b))
       {
         S[0].insert(u);
       }
-      else if (is_false(cb))
+      else if (is_false(b))
       {
         S[1].insert(u);
       }
