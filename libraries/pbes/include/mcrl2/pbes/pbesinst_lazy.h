@@ -491,7 +491,7 @@ class pbesinst_lazy_algorithm
             &todo,
             i,
             number_of_active_processes,
-            m_global_sigma,
+            m_global_sigma.clone(),
             m_global_R.clone()
           );
         });
