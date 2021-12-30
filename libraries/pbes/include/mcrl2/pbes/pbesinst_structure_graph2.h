@@ -480,18 +480,20 @@ class pbesinst_structure_graph_algorithm2: public pbesinst_structure_graph_algor
     {
       super::rewrite_psi(result, symbol, X, psi);
       Rplus_traverser::stack_element test = Rplus(result);
-      b.insert({result, test.b});
       if (is_true(test.b))
       {
         result = test.g0;
+        b.insert({result, test.b});
         return;
       }
       else if (is_false(test.b))
       {
         result = test.g1;
+        b.insert({result, test.b});
         return;
       }
       result = test.f;
+      b.insert({result, test.b});
     }
 
     void on_report_equation(const propositional_variable_instantiation& X, const pbes_expression& psi, std::size_t k) override
