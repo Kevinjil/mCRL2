@@ -119,6 +119,11 @@ class pbesinst_structure_graph_algorithm: public pbesinst_lazy_algorithm
         m_graph_builder(G)
     {}
 
+    void prepare_equation_report(std::shared_mutex& modify_access) override {
+      std::size_t required = m_graph_builder.vertices().size() + 2 * QUEUE_SIZE;
+      m_graph_builder.ensure_capacity(required, modify_access);
+    }
+
     void on_report_equation(const propositional_variable_instantiation& X, const pbes_expression& psi, std::size_t k) override
     {
       // the body of this if statement will only be executed for the first equation

@@ -10,6 +10,8 @@
 /// \brief A lazy algorithm for instantiating a PBES, ported from bes_deprecated.h.
 
 #include <thread>
+#include <mutex>
+#include <shared_mutex>
 #include <boost/range/join.hpp>
 
 #include "mcrl2/atermpp/standard_containers/deque.h"
@@ -203,7 +205,8 @@ class pbesinst_lazy_algorithm
 
     // Mutexes
     std::mutex m_exclusive_todo_access;
-    std::mutex m_exclusive_graph_access;
+    std::mutex m_write_graph_access;
+    std::shared_mutex m_read_graph_access;
 
     volatile bool m_must_abort = false;
 
@@ -366,6 +369,73 @@ class pbesinst_lazy_algorithm
       return false;
     }
 
+    void process_queue(
+      std::size_t queueSize,
+      data::mutable_indexed_substitution<>& sigma,
+      enumerate_quantifiers_rewriter& R,
+      std::array<propositional_variable_instantiation, QUEUE_SIZE>& X,
+      std::array<pbes_expression, QUEUE_SIZE>& psi,
+      atermpp::indexed_set<propositional_variable_instantiation>& Discovered
+    )
+    {
+      std::shared_lock<std::shared_mutex> lock(m_read_graph_access);
+      for (std::size_t e = 0; e < queueSize && !m_must_abort; ++e)
+      {
+        ++m_iteration_count;
+        mCRL2log(log::status) << status_message(m_iteration_count);
+        detail::check_bes_equation_limit(m_iteration_count);
+
+        std::size_t index = m_equation_index.index(X[e].name());
+        const pbes_equation& eqn = m_pbes.equations()[index];
+        const auto& phi = eqn.formula();
+
+        data::add_assignments(sigma, eqn.variable().parameters(), X[e].parameters());
+        rewrite_psi(psi[e], eqn.symbol(), X[e], R(phi, sigma));
+        R.clear_identifier_generator();
+        data::remove_assignments(sigma, eqn.variable().parameters());
+
+        for (auto var : find_propositional_variable_instantiations(psi[e])) {
+          Discovered.insert(var);
+        }
+      }
+    }
+
+    virtual void prepare_equation_report(std::shared_mutex& modify_access) {}
+
+    void finish_queue(
+      pbesinst_lazy_todo* todo,
+      std::size_t process_number,
+      std::size_t queueSize,
+      std::array<propositional_variable_instantiation, QUEUE_SIZE>& X,
+      std::array<pbes_expression, QUEUE_SIZE>& psi,
+      atermpp::indexed_set<propositional_variable_instantiation>& Discovered
+    )
+    {
+      m_write_graph_access.lock();
+      prepare_equation_report(m_read_graph_access);
+      for (std::size_t e = 0; e < queueSize && !m_must_abort; ++e)
+      {
+        // report the generated equation
+        std::size_t k = m_equation_index.rank(X[e].name());
+        mCRL2log(log::debug) << "Thread " << process_number << " generated equation " << X[e] << " = " << psi[e] << " with rank " << k << std::endl;
+
+        on_report_equation(X[e], psi[e], k);
+      }
+      m_write_graph_access.unlock();
+
+      todo->insert(Discovered.begin(), Discovered.end(), discovered);
+      for (auto o : Discovered) {
+        discovered.insert(o);
+      }
+      on_discovered_elements(Discovered);
+      Discovered.clear();
+
+      if (solution_found(init))
+      {
+        m_must_abort = true;
+      }
+    }
+
     virtual void run_thread(
       pbesinst_lazy_todo* todo,
       const std::size_t process_number,
@@ -391,50 +461,10 @@ class pbesinst_lazy_algorithm
           }
           if (m_options.number_of_threads>0) m_exclusive_todo_access.unlock();
 
-          for (std::size_t e = 0; e < queueSize && !m_must_abort; ++e)
-          {
-            ++m_iteration_count;
-            mCRL2log(log::status) << status_message(m_iteration_count);
-            detail::check_bes_equation_limit(m_iteration_count);
-
-            std::size_t index = m_equation_index.index(X[e].name());
-            const pbes_equation& eqn = m_pbes.equations()[index];
-            const auto& phi = eqn.formula();
-            data::add_assignments(sigma, eqn.variable().parameters(), X[e].parameters());
-
-            // if (m_options.number_of_threads>0) m_exclusive_graph_access.lock();
-            rewrite_psi(psi[e], eqn.symbol(), X[e], R(phi, sigma));
-            // if (m_options.number_of_threads>0) m_exclusive_graph_access.unlock();
-            R.clear_identifier_generator();
-            data::remove_assignments(sigma, eqn.variable().parameters());
-
-            for (auto var : find_propositional_variable_instantiations(psi[e])) {
-              Discovered.insert(var);
-            }
-          }
-
-          if (m_options.number_of_threads>0) m_exclusive_graph_access.lock();
+          process_queue(queueSize, sigma, R, X, psi, Discovered);
+          
           if (m_options.number_of_threads>0) m_exclusive_todo_access.lock();
-          for (std::size_t e = 0; e < queueSize && !m_must_abort; ++e)
-          {
-            // report the generated equation
-            std::size_t k = m_equation_index.rank(X[e].name());
-            mCRL2log(log::debug) << "Thread " << process_number << " generated equation " << X[e] << " = " << psi[e] << " with rank " << k << std::endl;
-
-            on_report_equation(X[e], psi[e], k);
-          }
-          todo->insert(Discovered.begin(), Discovered.end(), discovered);
-          for (auto o : Discovered) {
-            discovered.insert(o);
-          }
-          on_discovered_elements(Discovered);
-          Discovered.clear();
-
-          if (solution_found(init))
-          {
-            m_must_abort = true;
-          }
-          if (m_options.number_of_threads>0) m_exclusive_graph_access.unlock();
+          finish_queue(todo, process_number, queueSize, X, psi, Discovered);
         }
         if (m_options.number_of_threads>0) m_exclusive_todo_access.unlock();
 

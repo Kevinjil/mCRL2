@@ -12,6 +12,7 @@
 #ifndef MCRL2_PBES_STRUCTURE_GRAPH_BUILDER_H
 #define MCRL2_PBES_STRUCTURE_GRAPH_BUILDER_H
 
+#include <shared_mutex>
 #include "mcrl2/atermpp/standard_containers/vector.h"
 #include "mcrl2/pbes/pbessolve_vertex_set.h"
 
@@ -101,6 +102,26 @@ struct structure_graph_builder
       return structure_graph::d_disjunction;
     }
     throw std::runtime_error("structure_graph_builder: encountered unsupported pbes_expression " + pp(x));
+  }
+
+  void ensure_capacity(std::size_t required_capacity, std::shared_mutex& modify_access)
+  {
+    // Ensure vertex map capacity.
+    std::size_t capacity = m_vertex_map.max_load_factor() * m_vertex_map.bucket_count();
+    if (required_capacity >= capacity) {
+        std::unique_lock<std::shared_mutex> lock(modify_access);
+        m_vertex_map.reserve(capacity * 2);
+    }
+
+    // Ensure vertice and formula capacity.
+    // As they contain the same amount of elements, they resize equally.
+    capacity = vertices().capacity();
+    if (required_capacity >= capacity) {
+      // A resize is needed, lock reading and reszie the vector.
+      std::unique_lock<std::shared_mutex> lock(modify_access);
+      vertices().reserve(2 * capacity);
+      formulas().reserve(2 * capacity);
+    }
   }
 
   index_type create_vertex(const pbes_expression& x)
