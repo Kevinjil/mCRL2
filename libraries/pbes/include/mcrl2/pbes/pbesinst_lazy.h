@@ -172,7 +172,7 @@ std::ostream& operator<<(std::ostream& out, const pbesinst_lazy_todo& todo)
 class pbesinst_lazy_algorithm
 {
   protected:
-    static constexpr std::size_t QUEUE_SIZE = 8;
+    static constexpr std::size_t QUEUE_SIZE = 1;
   
     /// \brief Algorithm options.
     const pbessolve_options& m_options;
@@ -421,7 +421,6 @@ class pbesinst_lazy_algorithm
 
         on_report_equation(X[e], psi[e], k);
       }
-      m_write_graph_access.unlock();
 
       todo->insert(Discovered.begin(), Discovered.end(), discovered);
       for (auto o : Discovered) {
@@ -434,6 +433,7 @@ class pbesinst_lazy_algorithm
       {
         m_must_abort = true;
       }
+      m_write_graph_access.unlock();
     }
 
     virtual void run_thread(
