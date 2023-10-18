@@ -14,6 +14,9 @@
 
 #include <regex>
 
+#include "mcrl2/atermpp/standard_containers/unordered_map.h"
+#include "mcrl2/atermpp/standard_containers/vector.h"
+
 #include "mcrl2/core/parse.h"
 
 #include "mcrl2/data/rewriter.h"
@@ -299,7 +302,7 @@ namespace detail
 {
 // Put the equalities t==u in the replacement map as u:=t.
 inline void fill_replacement_map(const data::data_expression& equalities_in_conjunction, 
-                                 std::map<data::data_expression, data::data_expression>& replacement_map)
+                                 atermpp::unordered_map<data::data_expression, data::data_expression>& replacement_map)
 {
   if (equalities_in_conjunction==data::sort_bool::true_())
   {
@@ -323,39 +326,32 @@ inline void fill_replacement_map(const data::data_expression& equalities_in_conj
 
 // Replace expressions in e according to the replacement map.
 // Assume that e only consists of and, not and equality applied to terms. 
-inline data::data_expression replace_expressions(const data::data_expression& e, 
-                                    const std::map<data::data_expression, data::data_expression>& replacement_map)
+inline void replace_expressions(
+                                    data::data_expression& result,
+                                    const data::data_expression& e, 
+                                    const atermpp::unordered_map<data::data_expression, data::data_expression>& replacement_map)
 {
-  if (data::sort_bool::is_and_application(e))
-  {
-    return data::sort_bool::and_(replace_expressions(data::sort_bool::left(e),replacement_map),
-                           replace_expressions(data::sort_bool::right(e),replacement_map));
-  }
-  if (data::sort_bool::is_not_application(e))
-  {
-    return data::sort_bool::not_(replace_expressions(data::sort_bool::arg(e),replacement_map));
-  }
-  if (is_equal_to_application(e))
+  if (data::sort_bool::is_and_application(e) || data::sort_bool::is_not_application(e) || is_equal_to_application(e))
   {
     const data::application a=atermpp::down_cast<data::application>(e);
-    return data::application(a.head(),
-                       replace_expressions(a[0],replacement_map),
-                       replace_expressions(a[1],replacement_map));
+    data::make_application(result,
+        a.head(),
+        a.begin(),
+        a.end(),
+        [&replacement_map](data::data_expression& result, const data::data_expression& t)
+        {
+          replace_expressions(result, t, replacement_map);
+        },
+        true);
+    return;
   }
-  const std::map<data::data_expression, data::data_expression>::const_iterator i=replacement_map.find(e);
+  const atermpp::unordered_map<data::data_expression, data::data_expression>::const_iterator i=replacement_map.find(e);
   if (i!=replacement_map.end()) // found;
   {
-    return i->second;
+    result = i->second;
+    return;
   }
-  return e;
-}
-
-// Substitute the equalities in equalities_in_conjunction from right to left in e. 
-inline data::data_expression substitute_equalities(const data::data_expression& e, const data::data_expression& equalities_in_conjunction)
-{
-  std::map<data::data_expression, data::data_expression> replacement_map;
-  fill_replacement_map(equalities_in_conjunction, replacement_map);
-  return replace_expressions(e,replacement_map);
+  result = e;
 }
 
 /// \brief Renames variables
@@ -548,10 +544,11 @@ lps::stochastic_specification action_rename(
 
       std::vector < variable_list >
       lps_new_sum_vars(1,lps_old_action_summand.summation_variables());
-      std::vector < data_expression > lps_new_condition(1,lps_old_action_summand.condition());
+      atermpp::vector < data_expression > lps_new_condition(1,lps_old_action_summand.condition());
       std::vector < process::action_list >
       lps_new_actions(1,process::action_list());
       std::vector < bool > lps_new_actions_is_delta(1,false);
+      data::data_expression tmp;
 
       mCRL2log(log::debug) << "Actions in summand found: " << lps_old_actions.size() << "\n";
       for (const process::action& lps_old_action: lps_old_actions)
@@ -681,12 +678,15 @@ lps::stochastic_specification action_rename(
                the negated new_condition. It will be concatenated to lps_new_condition,
                in which the terms will be conjoined with the non-negated new_condition */
 
-            std::vector < data_expression > lps_new_condition_temp(lps_new_condition);
+            atermpp::vector<data_expression> lps_new_condition_temp(lps_new_condition);
 
-            for (data_expression& d: lps_new_condition)
+            atermpp::unordered_map<data::data_expression, data::data_expression> replacement_map;
+            detail::fill_replacement_map(renamed_rule_condition, replacement_map);
+            for (data_expression &d : lps_new_condition)
             {
-              // substitute the equalities in d in renamed_rule_condition. 
-              d=lazy::and_(renamed_rule_condition,detail::substitute_equalities(d,renamed_rule_condition));
+              // substitute the equalities in d in renamed_rule_condition.
+              detail::replace_expressions(tmp, d, replacement_map);
+              d = lazy::and_(renamed_rule_condition, tmp(d, renamed_rule_condition));
             }
 
             for (const data_expression& d: lps_new_condition_temp)
