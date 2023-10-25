@@ -1,7 +1,5 @@
 include(CMakeParseArguments)
 
-# The Threads module provides the Threads::Threads target since 3.1
-cmake_minimum_required(VERSION 3.1)
 find_package(Threads)
 
 macro(append_unique LIST_VAR VALUE)
@@ -13,13 +11,12 @@ endmacro()
 
 function(_add_library_tests TARGET_NAME)
   file(GLOB librarytest "test/*.cpp")
-  file(GLOB libraryexample "example/*.cpp")
 
   if(MCRL2_SKIP_LONG_TESTS)
     add_definitions(-DMCRL2_SKIP_LONG_TESTS)
   endif(MCRL2_SKIP_LONG_TESTS)
 
-  foreach(category "librarytest" "libraryexample")
+  foreach(category "librarytest")
     foreach(test IN LISTS ${category})
 
       get_filename_component(base ${test} NAME_WE)
@@ -33,14 +30,10 @@ function(_add_library_tests TARGET_NAME)
         target_compile_definitions(${testname} PUBLIC -DMCRL2_TEST_JITTYC)
       endif()
 
-      if("${category}" STREQUAL "librarytest")
-        if(CMAKE_CONFIGURATION_TYPES)
-          add_test(NAME ${testname} COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${category}/$<CONFIG>/${testname}")
-        else()
-          add_test(NAME ${testname} COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${category}/${testname}")
-        endif()
+      if(CMAKE_CONFIGURATION_TYPES)
+        add_test(NAME ${testname} COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${category}/$<CONFIG>/${testname}" WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/Testing/")
       else()
-        add_test(NAME ${testname} COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target ${testname})
+        add_test(NAME ${testname} COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${category}/${testname}" WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/Testing/")
       endif()
 
       target_link_libraries(${testname} Threads::Threads)
@@ -161,8 +154,8 @@ function(_add_mcrl2_binary TARGET_NAME TARGET_TYPE)
       set(HAS_QT_DEPENDENCY TRUE)
     endif()
 
-    if("${DEP}" STREQUAL "Qt5::Widgets")
-      # This mCRL2 binary depends on Qt5::Widgets, so it is a gui binary.
+    if("${DEP}" STREQUAL "Qt6::Widgets")
+      # This mCRL2 binary depends on Qt6::Widgets, so it is a gui binary.
       set(IS_GUI_BINARY TRUE)
     endif()
   endforeach()

@@ -21,9 +21,7 @@
 
 #include "mcrl2/utilities/text_utility.h"
 
-namespace mcrl2 {
-
-  namespace log {
+namespace mcrl2::log {
 
 /// \brief Log levels that are supported
 /// \note log_debugi with i>=1 automatically indent 2*i spaces.
@@ -185,7 +183,7 @@ class logger
     static
     std::set<output_policy*>& output_policies()
     {
-      thread_local std::set<output_policy*> m_output_policies = initialise_output_policies();
+      static std::set<output_policy*> m_output_policies = initialise_output_policies();
       return m_output_policies;
     }
 
@@ -302,30 +300,30 @@ protected:
   /// \brief Records whether the last message that was printed ended with
   ///        a new line.
   static
-  bool& last_message_ended_with_newline()
+  std::atomic<bool>& last_message_ended_with_newline()
   {
-    thread_local bool m_last_message_ended_with_newline = true;
+    static std::atomic<bool> m_last_message_ended_with_newline = true;
     return m_last_message_ended_with_newline;
   }
 
   static
-  bool& last_message_was_status()
+  std::atomic<bool>& last_message_was_status()
   {
-    thread_local bool m_last_message_was_status = false;
+    static std::atomic<bool> m_last_message_was_status = false;
     return m_last_message_was_status;
   }
 
   static
-  std::size_t& caret_pos()
+  std::atomic<std::size_t>& caret_pos()
   {
-    thread_local std::size_t m_caret_pos = 0;
+    static std::atomic<std::size_t> m_caret_pos = 0;
     return m_caret_pos;
   }
 
   static
-  std::size_t& last_caret_pos()
+  std::atomic<std::size_t>& last_caret_pos()
   {
-    thread_local std::size_t m_last_caret_pos = 0;
+    static std::atomic<std::size_t> m_last_caret_pos = 0;
     return m_last_caret_pos;
   }
 
@@ -405,9 +403,6 @@ std::set<output_policy*> initialise_output_policies()
   return result;
 }
 
-/// \brief Default logger that we use
-typedef logger mcrl2_logger;
-
 /// \brief Unless otherwise specified, we compile away all debug messages that have
 /// a log level greater than MCRL2MaxLogLevel.
 constexpr log_level_t MCRL2MaxLogLevel = mcrl2::log::debug;
@@ -415,13 +410,12 @@ constexpr log_level_t MCRL2MaxLogLevel = mcrl2::log::debug;
 /// \returns True whenever the logging for the given level is enabled.
 constexpr bool mCRL2logEnabled(const log_level_t level)
 {
-  return level <= MCRL2MaxLogLevel && level <= info;
+  return level <= MCRL2MaxLogLevel && level <= mcrl2::log::logger::get_reporting_level();
 }
 
-  } // namespace log
-} // namespace mcrl2
+} // namespace mcrl2::log
 
 /// \brief mCRL2log(LEVEL) provides the stream used to log.
-#define mCRL2log(LEVEL) if (mcrl2::log::mCRL2logEnabled(LEVEL)) mcrl2::log::mcrl2_logger().get(LEVEL)
+#define mCRL2log(LEVEL) if (mcrl2::log::mCRL2logEnabled(LEVEL)) mcrl2::log::logger().get(LEVEL)
 
 #endif // MCRL2_UTILITIES_LOGGER_H

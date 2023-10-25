@@ -9,7 +9,7 @@
 #ifndef MCRL2_UTILITIES_QT_TOOL_H
 #define MCRL2_UTILITIES_QT_TOOL_H
 
-#include "mcrl2/utilities/toolset_version.h"
+#include <memory>
 #include <QAction>
 #include <QApplication>
 #include <QDateTime>
@@ -21,8 +21,8 @@
 #include <QString>
 #include <QUrl>
 #include <QtGlobal>
-
-#include <memory>
+#include "mcrl2/utilities/toolset_version.h"
+#include "mcrl2/utilities/logger.h"
 
 namespace mcrl2
 {
@@ -129,7 +129,14 @@ class qt_tool: public Tool
       // to here, since creating it in execute would make it
       // impossible to view the help text in an environment
       // without display server
-      m_application = std::unique_ptr<QApplication>(new QApplication(argc, argv));
+      try
+      {
+        m_application = std::unique_ptr<QApplication>(new QApplication(argc, argv));
+      }
+      catch (...)
+      {
+        mCRL2log(mcrl2::log::debug) << "Creating QApplication failed." << std::endl;
+      }
       return true;
     }
 

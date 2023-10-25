@@ -567,6 +567,7 @@ class prob_bisim_partitioner_grv  // Called after Groote, Rivera Verduzco and de
     void preprocessing_stage()
     {
       // Allocate space for states and transitions
+
       action_states.resize(aut.num_states());
       probabilistic_states.resize(aut.num_probabilistic_states());
       action_transitions.resize(aut.num_transitions());
@@ -592,7 +593,6 @@ class prob_bisim_partitioner_grv  // Called after Groote, Rivera Verduzco and de
       for (std::size_t i = 0; i < aut.num_probabilistic_states(); i++)
       {
         const typename LTS_TYPE::probabilistic_state_t& ps = aut.probabilistic_state(i);
-
         probabilistic_transition_type pt;
         if (ps.size()>1) // The probabilistic state is stored as a vector. 
         {
@@ -1280,9 +1280,18 @@ class prob_bisim_partitioner_grv  // Called after Groote, Rivera Verduzco and de
           }
         }
         /* Add all the state probabilities pairs in the mapping to its actual data type*/
-        for (typename std::map<state_key_type, probability_fraction_type>::iterator i = prob_state_map.begin(); i != prob_state_map.end(); i++)
+        typename std::map<state_key_type, probability_fraction_type>::iterator i = prob_state_map.begin();
+        if (++i==prob_state_map.end()) // There is only one state with probability one. 
         {
-          new_prob_state.add(i->first, i->second);
+          new_prob_state.set(prob_state_map.begin()->first);
+        }
+        else
+        {
+          // This probabilistic state has more components. 
+          for (const std::pair<state_key_type, probability_fraction_type>& i: prob_state_map)
+          {
+            new_prob_state.add(i.first, i.second);
+          }
         }
       }
       else // The state is stored as a number with implicit probability 1. 
@@ -1290,7 +1299,6 @@ class prob_bisim_partitioner_grv  // Called after Groote, Rivera Verduzco and de
         /* Check the resulting action state in the final State partition */
         new_prob_state.set(get_eq_class(ps.get()));
       }
-
       return new_prob_state;
     }
 
@@ -1383,8 +1391,8 @@ bool destructive_probabilistic_bisimulation_compare_grv(
 
   detail::prob_bisim_partitioner_grv<LTS_TYPE> prob_bisim_part(l1,timer);
 
-  return prob_bisim_part.in_same_probabilistic_class_grv(initial_probabilistic_state_key_l2,
-    initial_probabilistic_state_key_l1);
+  return prob_bisim_part.in_same_probabilistic_class_grv(initial_probabilistic_state_key_l2, 
+                                                         initial_probabilistic_state_key_l1);
 }
 
 } // end namespace detail
