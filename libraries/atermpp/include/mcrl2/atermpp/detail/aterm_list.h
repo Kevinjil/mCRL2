@@ -60,6 +60,9 @@ inline aterm make_list_backward(Iter first, Iter last, ATermConverter convert_to
 template <class Term, class Iter, class ATermConverter>
 inline void make_list_backward(term_list<Term>& result, Iter first, Iter last, ATermConverter convert_to_aterm);
 
+/// \brief Constructs a list starting from first to last where the result is put in result.
+template <class Term, class Iter, class ATermConverter>
+inline void make_list_backward(term_list<Term>& result, Iter first, Iter last, Term& temp, ATermConverter convert_to_aterm);
 
 /// \brief Constructs a list starting from first to last. The iterators are traversed backwards and each element is
 /// 		   converted using the TermConverter and inserted whenever TermFilter yields true for the converted element.
@@ -77,10 +80,6 @@ aterm make_list_forward(Iter first, Iter last, ATermConverter convert_to_aterm);
 /// \brief Constructs a list starting from first to last. Each element is converted using the TermConverter.
 template <typename Term, class Iter, class ATermConverter>
 inline void make_list_forward(term_list<Term>& result, Iter first, Iter last, ATermConverter convert_to_aterm);
-
-/// \brief Constructs a list starting from the first iterator element to the last. The result is put into the variable result. 
-template <class Term, class Iter, class ATermConverter>
-inline void make_list_backward(term_list<Term>& result, Iter first, Iter last, ATermConverter convert_to_aterm);
 
 /// \brief Constructs a list starting from first to last. Each element is converted using the TermConverter and inserted
 /// 		   whenever TermFilter yields true for the converted element.

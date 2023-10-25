@@ -167,8 +167,10 @@ class data_type_checker: public sort_type_checker
     void add_system_constants_and_functions(const std::vector<data::function_symbol>& v);
     bool TypeMatchA(const sort_expression& Type_in, const sort_expression& PosType_in, sort_expression& result) const;
     bool TypeMatchL(const sort_expression_list& TypeList, const sort_expression_list& PosTypeList, sort_expression_list& result) const;
-    sort_expression UnwindType(const sort_expression& Type) const;
-    variable UnwindType(const variable& v) const;
+    void UnwindType(sort_expression& result, const sort_expression& Type) const;
+    void UnwindType(variable& result, const variable& v) const;
+    template <class T>
+    bool assert_equal_UnwindType(const T& x1, const T& x2) const;
     template <class T>
     atermpp::term_list<T> UnwindType(const atermpp::term_list<T>& l)
     {

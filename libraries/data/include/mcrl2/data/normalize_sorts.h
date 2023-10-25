@@ -120,6 +120,17 @@ void normalize_sorts(T& x,
 } 
 
 template <typename T>
+void normalize_sorts(T& result,
+                  const T& x,
+                  const data::sort_specification& sort_spec,
+                  typename std::enable_if< std::is_base_of<atermpp::aterm, T>::value >::type* = nullptr
+                 )
+{
+  core::make_update_apply_builder<data::sort_expression_builder>
+         (data::detail::normalize_sorts_function(sort_spec)).apply(result, x);
+}
+
+template <typename T>
 T normalize_sorts(const T& x,
                   const data::sort_specification& sort_spec,
                   typename std::enable_if< std::is_base_of<atermpp::aterm, T>::value >::type* = nullptr

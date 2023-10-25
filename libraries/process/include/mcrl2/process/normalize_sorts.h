@@ -31,6 +31,16 @@ void normalize_sorts(T& x,
 }
 
 template <typename T>
+void normalize_sorts(T& result,
+                     const T& x,
+                     const data::sort_specification& sortspec,
+                     typename std::enable_if< std::is_base_of< atermpp::aterm, T >::value >::type* = nullptr
+                    )
+{
+  core::make_update_apply_builder<process::sort_expression_builder>(data::detail::normalize_sorts_function(sortspec)).apply(result, x);
+}
+
+template <typename T>
 T normalize_sorts(const T& x,
                   const data::sort_specification& sortspec,
                   typename std::enable_if< std::is_base_of< atermpp::aterm, T >::value >::type* = nullptr
@@ -39,7 +49,6 @@ T normalize_sorts(const T& x,
   T result;
   core::make_update_apply_builder<process::sort_expression_builder>(data::detail::normalize_sorts_function(sortspec)).apply(result, x);
   return result;
- 
 }
 
 } // namespace process

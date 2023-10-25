@@ -31,6 +31,16 @@ void normalize_sorts(T& x,
 }
 
 template <typename T>
+void normalize_sorts(T& result,
+                     const T& x,
+                     const data::sort_specification& sortspec,
+                     typename std::enable_if< std::is_base_of< atermpp::aterm, T >::value>::type* = nullptr
+                    )
+{
+  core::make_update_apply_builder<action_formulas::sort_expression_builder>(data::detail::normalize_sorts_function(sortspec)).apply(result, x);
+}
+
+template <typename T>
 T normalize_sorts(const T& x,
                   const data::sort_specification& sortspec,
                   typename std::enable_if< std::is_base_of< atermpp::aterm, T >::value>::type* = nullptr
@@ -56,6 +66,16 @@ void normalize_sorts(T& x,
 }
 
 template <typename T>
+void normalize_sorts(T& result,
+                     const T& x,
+                     const data::sort_specification& sortspec,
+                     typename std::enable_if< std::is_base_of< atermpp::aterm, T >::value>::type* = nullptr
+                    )
+{
+  core::make_update_apply_builder<regular_formulas::sort_expression_builder>(data::detail::normalize_sorts_function(sortspec)).apply(result, x);
+}
+
+template <typename T>
 T normalize_sorts(const T& x,
                   const data::sort_specification& sortspec,
                   typename std::enable_if< std::is_base_of< atermpp::aterm, T >::value>::type* = nullptr
@@ -78,6 +98,16 @@ void normalize_sorts(T& x,
                     )
 {
   core::make_update_apply_builder<state_formulas::sort_expression_builder>(data::detail::normalize_sorts_function(sortspec)).update(x);
+}
+
+template <typename T>
+void normalize_sorts(T& result, 
+                     const T& x,
+                     const data::sort_specification& sortspec,
+                     typename std::enable_if< std::is_base_of< atermpp::aterm, T >::value>::type* = nullptr
+                    )
+{
+  core::make_update_apply_builder<state_formulas::sort_expression_builder>(data::detail::normalize_sorts_function(sortspec)).apply(result, x);
 }
 
 template <typename T>

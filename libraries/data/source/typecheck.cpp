@@ -181,7 +181,7 @@ bool mcrl2::data::data_type_checker::strict_type_check(const data_expression& d)
     application::const_iterator j=appl.begin();
     for(sort_expression_list::const_iterator i=argument_sorts.begin(); i!=argument_sorts.end(); ++i,++j)
     {
-      assert(UnwindType(j->sort())==UnwindType(*i));
+      assert(assert_equal_UnwindType(j->sort(), *i));
       strict_type_check(*j);
     }
     return true;
@@ -219,8 +219,8 @@ sort_expression mcrl2::data::data_type_checker::UpCastNumericType(
 
   // Added to make sure that the types are sufficiently unrolled, because this function is not always called
   // with unrolled types.
-  NeededType=UnwindType(NeededType);
-  Type=UnwindType(Type);
+  UnwindType(NeededType, NeededType);
+  UnwindType(Type, Type);
 
   if (EqTypesA(NeededType,Type))
   {
@@ -383,8 +383,7 @@ sort_expression mcrl2::data::data_type_checker::UpCastNumericType(
     {
       Type=TraverseVarConsTypeD(DeclaredVars,Par,
                    needed_similar_container_type,strictly_ambiguous,warn_upcasting,print_cast_error);
-      assert(UnwindType(Type)==UnwindType(needed_similar_container_type));
-
+      assert(assert_equal_UnwindType(Type, needed_similar_container_type));
     }
     catch (mcrl2::runtime_error& e)
     {
@@ -468,7 +467,7 @@ bool mcrl2::data::data_type_checker::UnFSet(sort_expression PosType, sort_expres
   //select Set(Type), elements, return their list of arguments.
   if (is_basic_sort(PosType))
   {
-    PosType=UnwindType(PosType);
+    UnwindType(PosType, PosType);
   }
   if (sort_fset::is_fset(PosType) || sort_set::is_set(PosType))
   {
@@ -490,7 +489,7 @@ bool mcrl2::data::data_type_checker::UnFSet(sort_expression PosType, sort_expres
       sort_expression NewPosType=PosTypes.front();
       if (is_basic_sort(NewPosType))
       {
-        NewPosType=UnwindType(NewPosType);
+        UnwindType(NewPosType, NewPosType);
       }
       if (sort_fset::is_fset(sort_expression(NewPosType))|| (sort_set::is_set(sort_expression(NewPosType))))
       {
@@ -514,7 +513,7 @@ bool mcrl2::data::data_type_checker::UnFBag(sort_expression PosType, sort_expres
   //select Bag(Type), elements, return their list of arguments.
   if (is_basic_sort(PosType))
   {
-    PosType=UnwindType(PosType);
+    UnwindType(PosType, PosType);
   }
   if (sort_fbag::is_fbag(sort_expression(PosType)) || (sort_bag::is_bag(sort_expression(PosType))))
   {
@@ -536,7 +535,7 @@ bool mcrl2::data::data_type_checker::UnFBag(sort_expression PosType, sort_expres
       sort_expression NewPosType=PosTypes.front();
       if (is_basic_sort(NewPosType))
       {
-        NewPosType=UnwindType(NewPosType);
+        UnwindType(NewPosType, NewPosType);
       }
       if (sort_fbag::is_fbag(sort_expression(NewPosType))|| (sort_fbag::is_fbag(sort_expression(NewPosType))))
       {
@@ -560,7 +559,7 @@ bool mcrl2::data::data_type_checker::UnList(sort_expression PosType, sort_expres
   //select List(Type), elements, return their list of arguments.
   if (is_basic_sort(PosType))
   {
-    PosType=UnwindType(PosType);
+    UnwindType(PosType, PosType);
   }
   if (sort_list::is_list(sort_expression(PosType)))
   {
@@ -582,7 +581,7 @@ bool mcrl2::data::data_type_checker::UnList(sort_expression PosType, sort_expres
       sort_expression NewPosType=PosTypes.front();
       if (is_basic_sort(NewPosType))
       {
-        NewPosType=UnwindType(NewPosType);
+        UnwindType(NewPosType, NewPosType);
       }
       if (sort_list::is_list(NewPosType))
       {
@@ -610,7 +609,7 @@ bool mcrl2::data::data_type_checker::UnArrowProd(const sort_expression_list& Arg
 
   if (is_basic_sort(PosType))
   {
-    PosType=UnwindType(PosType);
+    UnwindType(PosType, PosType);
   }
   if (is_function_sort(PosType))
   {
@@ -650,7 +649,7 @@ bool mcrl2::data::data_type_checker::UnArrowProd(const sort_expression_list& Arg
       sort_expression NewPosType=PosTypes.front();
       if (is_basic_sort(NewPosType))
       {
-        NewPosType=UnwindType(NewPosType);
+        UnwindType(NewPosType, NewPosType);
       }
       if (is_function_sort(NewPosType))
       {
@@ -780,9 +779,10 @@ bool mcrl2::data::data_type_checker::MatchListOpCons(const function_sort& type, 
   sort_expression Res=type.codomain();
   if (is_basic_sort(Res))
   {
-    Res=UnwindType(Res);
+    UnwindType(Res, Res);
   }
-  if (!sort_list::is_list(UnwindType(Res)))
+  UnwindType(result, Res);
+  if (!sort_list::is_list(result))
   {
     return false;
   }
@@ -797,7 +797,7 @@ bool mcrl2::data::data_type_checker::MatchListOpCons(const function_sort& type, 
   sort_expression Arg2=Args.front();
   if (is_basic_sort(Arg2))
   {
-    Arg2=UnwindType(Arg2);
+    UnwindType(Arg2, Arg2);
   }
   if (!sort_list::is_list(sort_expression(Arg2)))
   {
@@ -805,13 +805,12 @@ bool mcrl2::data::data_type_checker::MatchListOpCons(const function_sort& type, 
   }
   Arg2=down_cast<container_sort>(Arg2).element_sort();
 
-  sort_expression new_result;
-  if (!UnifyMinType(Res,Arg1,new_result))
+  if (!UnifyMinType(Res,Arg1,result))
   {
     return false;
   }
 
-  if (!UnifyMinType(new_result,Arg2,Res))
+  if (!UnifyMinType(result,Arg2,Res))
   {
     return false;
   }
@@ -828,7 +827,7 @@ bool mcrl2::data::data_type_checker::MatchListOpSnoc(const function_sort& type, 
   sort_expression Res=type.codomain();
   if (is_basic_sort(Res))
   {
-    Res=UnwindType(Res);
+    UnwindType(Res, Res);
   }
   if (!sort_list::is_list(sort_expression(Res)))
   {
@@ -843,7 +842,7 @@ bool mcrl2::data::data_type_checker::MatchListOpSnoc(const function_sort& type, 
   sort_expression Arg1=Args.front();
   if (is_basic_sort(Arg1))
   {
-    Arg1=UnwindType(Arg1);
+    UnwindType(Arg1, Arg1);
   }
   if (!sort_list::is_list(sort_expression(Arg1)))
   {
@@ -877,7 +876,7 @@ bool mcrl2::data::data_type_checker::MatchListOpConcat(const function_sort& type
   sort_expression Res=type.codomain();
   if (is_basic_sort(Res))
   {
-    Res=UnwindType(Res);
+    UnwindType(Res, Res);
   }
   if (!sort_list::is_list(sort_expression(Res)))
   {
@@ -893,7 +892,7 @@ bool mcrl2::data::data_type_checker::MatchListOpConcat(const function_sort& type
   sort_expression Arg1=Args.front();
   if (is_basic_sort(Arg1))
   {
-    Arg1=UnwindType(Arg1);
+    UnwindType(Arg1, Arg1);
   }
   if (!sort_list::is_list(sort_expression(Arg1)))
   {
@@ -906,7 +905,7 @@ bool mcrl2::data::data_type_checker::MatchListOpConcat(const function_sort& type
   sort_expression Arg2=Args.front();
   if (is_basic_sort(Arg2))
   {
-    Arg2=UnwindType(Arg2);
+    UnwindType(Arg2, Arg2);
   }
   if (!sort_list::is_list(sort_expression(Arg2)))
   {
@@ -945,7 +944,7 @@ bool mcrl2::data::data_type_checker::MatchListOpEltAt(const function_sort& type,
   sort_expression Arg1=Args.front();
   if (is_basic_sort(Arg1))
   {
-    Arg1=UnwindType(Arg1);
+    UnwindType(Arg1, Arg1);
   }
   if (!sort_list::is_list(sort_expression(Arg1)))
   {
@@ -978,7 +977,7 @@ bool mcrl2::data::data_type_checker::MatchListOpHead(const function_sort& type, 
   sort_expression Arg=Args.front();
   if (is_basic_sort(Arg))
   {
-    Arg=UnwindType(Arg);
+    UnwindType(Arg, Arg);
   }
   if (!sort_list::is_list(Arg))
   {
@@ -1005,7 +1004,7 @@ bool mcrl2::data::data_type_checker::MatchListOpTail(const function_sort& type, 
   sort_expression Res=type.codomain();
   if (is_basic_sort(Res))
   {
-    Res=UnwindType(Res);
+    UnwindType(Res, Res);
   }
   if (!sort_list::is_list(sort_expression(Res)))
   {
@@ -1020,7 +1019,7 @@ bool mcrl2::data::data_type_checker::MatchListOpTail(const function_sort& type, 
   sort_expression Arg=Args.front();
   if (is_basic_sort(Arg))
   {
-    Arg=UnwindType(Arg);
+    UnwindType(Arg, Arg);
   }
   if (!sort_list::is_list(sort_expression(Arg)))
   {
@@ -1050,7 +1049,7 @@ bool mcrl2::data::data_type_checker::MatchSetOpSet2Bag(const function_sort& type
   sort_expression Res=type.codomain();
   if (is_basic_sort(Res))
   {
-    Res=UnwindType(Res);
+    UnwindType(Res, Res);
   }
   if (!sort_bag::is_bag(sort_expression(Res)))
   {
@@ -1067,7 +1066,7 @@ bool mcrl2::data::data_type_checker::MatchSetOpSet2Bag(const function_sort& type
   sort_expression Arg=Args.front();
   if (is_basic_sort(Arg))
   {
-    Arg=UnwindType(Arg);
+    UnwindType(Arg, Arg);
   }
   if (!sort_set::is_set(sort_expression(Arg)))
   {
@@ -1094,7 +1093,7 @@ bool mcrl2::data::data_type_checker::MatchSetConstructor(const function_sort& ty
   sort_expression Res=type.codomain();
   if (is_basic_sort(Res))
   {
-    Res=UnwindType(Res);
+    UnwindType(Res, Res);
   }
   if (!sort_set::is_set(Res))
   {
@@ -1111,7 +1110,7 @@ bool mcrl2::data::data_type_checker::MatchSetConstructor(const function_sort& ty
   sort_expression Arg1=Args.front();
   if (is_basic_sort(Arg1))
   {
-    Arg1=UnwindType(Arg1);
+    UnwindType(Arg1, Arg1);
   }
   if (!is_function_sort(sort_expression(Arg1)))
   {
@@ -1143,7 +1142,7 @@ bool mcrl2::data::data_type_checker::MatchSetConstructor(const function_sort& ty
   sort_expression Arg2=Args.front();
   if (is_basic_sort(Arg2))
   {
-    Arg2=UnwindType(Arg2);
+    UnwindType(Arg2, Arg2);
   }
   if (!sort_fset::is_fset(Arg2))
   {
@@ -1183,7 +1182,7 @@ bool mcrl2::data::data_type_checker::MatchBagConstructor(const function_sort& ty
   sort_expression Res=type.codomain();
   if (is_basic_sort(Res))
   {
-    Res=UnwindType(Res);
+    UnwindType(Res, Res);
   }
   if (!sort_bag::is_bag(Res))
   {
@@ -1200,7 +1199,7 @@ bool mcrl2::data::data_type_checker::MatchBagConstructor(const function_sort& ty
   sort_expression Arg1=Args.front();
   if (is_basic_sort(Arg1))
   {
-    Arg1=UnwindType(Arg1);
+    UnwindType(Arg1, Arg1);
   }
   if (!is_function_sort(sort_expression(Arg1)))
   {
@@ -1232,7 +1231,7 @@ bool mcrl2::data::data_type_checker::MatchBagConstructor(const function_sort& ty
   sort_expression Arg2=Args.front();
   if (is_basic_sort(Arg2))
   {
-    Arg2=UnwindType(Arg2);
+    UnwindType(Arg2, Arg2);
   }
   if (!sort_fbag::is_fbag(Arg2))
   {
@@ -1270,7 +1269,7 @@ bool mcrl2::data::data_type_checker::MatchListSetBagOpIn(const function_sort& ty
   sort_expression Arg2=Args.front();
   if (is_basic_sort(Arg2))
   {
-    Arg2=UnwindType(Arg2);
+    UnwindType(Arg2, Arg2);
   }
   if (!is_container_sort(Arg2))
   {
@@ -1302,7 +1301,7 @@ bool mcrl2::data::data_type_checker::match_fset_insert(const function_sort& type
   sort_expression Arg2=Args.front();
   if (is_basic_sort(Arg2))
   {
-    Arg2=UnwindType(Arg2);
+    UnwindType(Arg2, Arg2);
   }
   if (!is_container_sort(Arg2))
   {
@@ -1334,13 +1333,13 @@ bool mcrl2::data::data_type_checker::match_fbag_cinsert(const function_sort& typ
   sort_expression Arg2=Args.front();
   if (is_basic_sort(Arg2))
   {
-    Arg2=UnwindType(Arg2);
+    UnwindType(Arg2, Arg2);
   }
   Args=Args.tail();
   sort_expression Arg3=Args.front();
   if (is_basic_sort(Arg3))
   {
-    Arg3=UnwindType(Arg3);
+    UnwindType(Arg3, Arg3);
   }
 
   sort_expression Arg2r;
@@ -1376,7 +1375,7 @@ bool mcrl2::data::data_type_checker::MatchSetBagOpUnionDiffIntersect(const funct
   sort_expression Res=type.codomain();
   if (is_basic_sort(Res))
   {
-    Res=UnwindType(Res);
+    UnwindType(Res, Res);
   }
   if (data::detail::IsNumericType(Res))
   {
@@ -1397,7 +1396,7 @@ bool mcrl2::data::data_type_checker::MatchSetBagOpUnionDiffIntersect(const funct
   sort_expression Arg1=Args.front();
   if (is_basic_sort(Arg1))
   {
-    Arg1=UnwindType(Arg1);
+    UnwindType(Arg1, Arg1);
   }
   if (data::detail::IsNumericType(Arg1))
   {
@@ -1415,7 +1414,7 @@ bool mcrl2::data::data_type_checker::MatchSetBagOpUnionDiffIntersect(const funct
   sort_expression Arg2=Args.front();
   if (is_basic_sort(Arg2))
   {
-    Arg2=UnwindType(Arg2);
+    UnwindType(Arg2, Arg2);
   }
   if (detail::IsNumericType(Arg2))
   {
@@ -1472,7 +1471,7 @@ bool mcrl2::data::data_type_checker::MatchSetOpSetCompl(const function_sort& typ
   sort_expression Res=type.codomain();
   if (is_basic_sort(Res))
   {
-    Res=UnwindType(Res);
+    UnwindType(Res, Res);
   }
   // if (detail::IsNumericType(Res))
   if (Res==sort_bool::bool_())
@@ -1490,7 +1489,7 @@ bool mcrl2::data::data_type_checker::MatchSetOpSetCompl(const function_sort& typ
   sort_expression Arg=Args.front();
   if (is_basic_sort(Arg))
   {
-    Arg=UnwindType(Arg);
+    UnwindType(Arg, Arg);
   }
   // if (detail::IsNumericType(Arg))
   if (Arg==sort_bool::bool_())
@@ -1530,7 +1529,7 @@ bool mcrl2::data::data_type_checker::MatchBagOpBag2Set(const function_sort& type
   sort_expression Res=type.codomain();
   if (is_basic_sort(Res))
   {
-    Res=UnwindType(Res);
+    UnwindType(Res, Res);
   }
   if (!sort_set::is_set(sort_expression(Res)))
   {
@@ -1547,7 +1546,7 @@ bool mcrl2::data::data_type_checker::MatchBagOpBag2Set(const function_sort& type
   sort_expression Arg=Args.front();
   if (is_basic_sort(Arg))
   {
-    Arg=UnwindType(Arg);
+    UnwindType(Arg, Arg);
   }
   if (!sort_bag::is_bag(sort_expression(Arg)))
   {
@@ -1591,7 +1590,7 @@ bool mcrl2::data::data_type_checker::MatchBagOpBagCount(const function_sort& typ
   sort_expression Arg2=Args.front();
   if (is_basic_sort(Arg2))
   {
-    Arg2=UnwindType(Arg2);
+    UnwindType(Arg2, Arg2);
   }
   if (!sort_bag::is_bag(sort_expression(Arg2)))
   {
@@ -1637,7 +1636,9 @@ bool mcrl2::data::data_type_checker::MatchFuncUpdate(const function_sort& type, 
   {
     return false;
   }
-  Arg1 = atermpp::down_cast<function_sort>(UnwindType(temp_result));
+  sort_expression temp_result_unwind;
+  UnwindType(temp_result_unwind, temp_result);
+  Arg1 = atermpp::down_cast<function_sort>(temp_result_unwind);
 
   // determine A and B from Arg1:
   sort_expression_list LA=Arg1.domain();
@@ -1841,9 +1842,11 @@ sort_expression mcrl2::data::data_type_checker::ExpandNumTypesUp(sort_expression
     const function_sort& t=down_cast<const function_sort>(Type);
     //the argument types, and if the resulting type is SortArrow -- recursively
     sort_expression_list NewTypeList;
+    sort_expression temp;
     for (sort_expression_list TypeList=t.domain(); !TypeList.empty(); TypeList=TypeList.tail())
     {
-      NewTypeList.push_front(ExpandNumTypesUp(UnwindType(TypeList.front())));
+      UnwindType(temp, TypeList.front());
+      NewTypeList.push_front(ExpandNumTypesUp(temp));
     }
     const sort_expression& ResultType=t.codomain();
     if (!is_function_sort(ResultType))
@@ -1852,7 +1855,8 @@ sort_expression mcrl2::data::data_type_checker::ExpandNumTypesUp(sort_expression
     }
     else
     {
-      return function_sort(reverse(NewTypeList),ExpandNumTypesUp(UnwindType(ResultType)));
+      UnwindType(temp, ResultType);
+      return function_sort(reverse(NewTypeList),ExpandNumTypesUp(temp));
     }
   }
 
@@ -1868,7 +1872,7 @@ sort_expression mcrl2::data::data_type_checker::ExpandNumTypesDown(sort_expressi
   }
   if (is_basic_sort(Type))
   {
-    Type=UnwindType(Type);
+    UnwindType(Type, Type);
   }
 
   bool function=false;
@@ -1952,7 +1956,7 @@ bool mcrl2::data::data_type_checker::EqTypesA(const sort_expression& Type1, cons
     return true;
   }
 
-  return UnwindType(Type1)==UnwindType(Type2);
+  return assert_equal_UnwindType(Type1, Type2);
 }
 
 bool mcrl2::data::data_type_checker::InTypesL(const sort_expression_list& Type, term_list<sort_expression_list> Types) const
@@ -2271,9 +2275,10 @@ sort_expression mcrl2::data::data_type_checker::TraverseVarConsTypeDN(
 
     if (i!=DeclaredVars.context().end())
     {
-      TypeA=normalize_sorts(i->second,get_sort_specification());
+      normalize_sorts(TypeA, i->second,get_sort_specification());
       TypeADefined=true;
-      const sort_expression Type1(UnwindType(TypeA));
+      sort_expression Type1;
+      UnwindType(Type1, TypeA);
       if (is_function_sort(Type1)?(function_sort(Type1).domain().size()==nFactPars):(nFactPars==0))
       {
         variable_=true;
@@ -2292,7 +2297,7 @@ sort_expression mcrl2::data::data_type_checker::TraverseVarConsTypeDN(
       std::map<core::identifier_string,sort_expression>::const_iterator i=DeclaredVars.context().find(Name);
       if (i!=DeclaredVars.context().end())
       {
-        TypeA=normalize_sorts(i->second,get_sort_specification());
+        normalize_sorts(TypeA, i->second,get_sort_specification());
         TypeADefined=true;
         sort_expression temp;
         if (!TypeMatchA(TypeA,PosType,temp))
@@ -2348,7 +2353,8 @@ sort_expression mcrl2::data::data_type_checker::TraverseVarConsTypeDN(
 
     if (TypeADefined)
     {
-      ParList = sort_expression_list({ UnwindType(TypeA) });
+      sort_expression temp;
+      make_term_list<sort_expression>(ParList, std::initializer_list<sort_expression>({ TypeA }), temp, [&](sort_expression& result, const sort_expression& e){ UnwindType(result, e); });
     }
     else
     {
@@ -2592,6 +2598,7 @@ sort_expression mcrl2::data::data_type_checker::TraverseVarConsTypeD(
 {
   //Type checks and transforms DataTerm replacing Unknown datatype with other ones.
   //Returns the type of the term which should match the PosType.
+  sort_expression temp;
 
   if (is_abstraction(DataTerm))
   {
@@ -2643,7 +2650,6 @@ sort_expression mcrl2::data::data_type_checker::TraverseVarConsTypeD(
       {
         throw mcrl2::runtime_error(std::string(e.what()) + "\nThe condition or count of a set/bag comprehension " + data::pp(DataTerm) + " cannot be determined.");
       }
-      sort_expression temp;
       if (TypeMatchA(sort_bool::bool_(),ResType,temp))
       {
         NewType=sort_set::set_(sort_expression(element_sort));
@@ -2692,7 +2698,6 @@ sort_expression mcrl2::data::data_type_checker::TraverseVarConsTypeD(
       CopyDeclaredVars.add_context_variables(bound_variables);
 
       data_expression Data=abstr.body();
-      sort_expression temp;
       if (!TypeMatchA(sort_bool::bool_(),PosType,temp))
       {
         throw mcrl2::runtime_error("The type of an exist/forall for " + data::pp(DataTerm) + " cannot be determined.");
@@ -2891,7 +2896,6 @@ sort_expression mcrl2::data::data_type_checker::TraverseVarConsTypeD(
           }
           else
           {
-            sort_expression temp;
             if (!MaximumType(NewType,Type0,temp))
             {
               throw mcrl2::runtime_error("Set contains incompatible elements of sorts " + data::pp(OldNewType) + " and " + data::pp(Type0) + " (while typechecking " + data::pp(Argument) + ".");
@@ -2984,7 +2988,6 @@ sort_expression mcrl2::data::data_type_checker::TraverseVarConsTypeD(
           }
           else
           {
-            sort_expression temp;
             if (!MaximumType(NewType,Type0,temp))
             {
               throw mcrl2::runtime_error("Bag contains incompatible elements of sorts " + data::pp(OldNewType) + " and " + data::pp(Type0) + " (while typechecking " + data::pp(Argument0) + ").");
@@ -3088,9 +3091,10 @@ sort_expression mcrl2::data::data_type_checker::TraverseVarConsTypeD(
     //we do the arguments again with the types.
 
 
-    if (is_function_sort(UnwindType(NewType)))
+    UnwindType(temp, NewType);
+    if (is_function_sort(temp))
     {
-      sort_expression_list NeededArgumentTypes=down_cast<function_sort>(UnwindType(NewType)).domain();
+      sort_expression_list NeededArgumentTypes=down_cast<function_sort>(temp).domain();
 
       if (NeededArgumentTypes.size()!=Arguments.size())
       {
@@ -3163,9 +3167,9 @@ sort_expression mcrl2::data::data_type_checker::TraverseVarConsTypeD(
     }
 
     //and the arguments once more
-    if (is_function_sort(UnwindType(NewType)))
+    if (is_function_sort(temp))
     {
-      sort_expression_list NeededArgumentTypes=down_cast<function_sort>(UnwindType(NewType)).domain();
+      sort_expression_list NeededArgumentTypes=down_cast<function_sort>(temp).domain();
       sort_expression_list NewArgumentTypes;
       data_expression_list NewArguments;
       for (; !Arguments.empty(); Arguments=Arguments.tail(),
@@ -3217,7 +3221,7 @@ sort_expression mcrl2::data::data_type_checker::TraverseVarConsTypeD(
 
     DataTerm=application(Data,Arguments);
 
-    if (is_function_sort(UnwindType(NewType)))
+    if (is_function_sort(temp))
     {
       // Code below is a hack as sometimes the type of the returned numeral is not equal
       // to the PosType that is requested. Hence, a typecast must be added explicitly. 
@@ -3225,11 +3229,11 @@ sort_expression mcrl2::data::data_type_checker::TraverseVarConsTypeD(
       if (PosType !=data::untyped_sort() && s != PosType && 
              (s == sort_int::int_() || s == sort_pos::pos() || s == sort_nat::nat() || s == sort_real::real_())) 
       {
-        return UpCastNumericType(PosType, atermpp::down_cast<function_sort>(UnwindType(NewType)).codomain(),
+        return UpCastNumericType(PosType, atermpp::down_cast<function_sort>(temp).codomain(),
                                        DataTerm,DeclaredVars,strictly_ambiguous,warn_upcasting,print_cast_error);
       }
       // end of the explicit upcast hack. Continuing with the original code. 
-      return atermpp::down_cast<function_sort>(UnwindType(NewType)).codomain();  
+      return atermpp::down_cast<function_sort>(temp).codomain();  
     }
 
     sort_expression temp_type;
@@ -3263,7 +3267,6 @@ sort_expression mcrl2::data::data_type_checker::TraverseVarConsTypeD(
       }
       DataTerm=data::function_symbol(Name,Sort);
 
-      sort_expression temp;
       if (TypeMatchA(Sort,PosType,temp))
       {
         return Sort;
@@ -3285,7 +3288,8 @@ sort_expression mcrl2::data::data_type_checker::TraverseVarConsTypeD(
     const std::map<core::identifier_string,sort_expression>::const_iterator it=DeclaredVars.context().find(Name);
     if (it!=DeclaredVars.context().end())
     {
-      sort_expression Type=normalize_sorts(it->second,get_sort_specification());
+      sort_expression Type;
+      normalize_sorts(Type, it->second, get_sort_specification());
       DataTerm=variable(Name,Type);
 
       sort_expression NewType;
@@ -3476,7 +3480,8 @@ void mcrl2::data::data_type_checker::read_constructors_and_mappings(const functi
     //if FuncType is a defined function sort, unwind it
     if (is_basic_sort(FuncType))
     {
-      const sort_expression NewFuncType=UnwindType(FuncType);
+      sort_expression NewFuncType;
+      UnwindType(NewFuncType, FuncType);
       if (is_function_sort(NewFuncType))
       {
         FuncType=NewFuncType;
@@ -3509,7 +3514,7 @@ void mcrl2::data::data_type_checker::read_constructors_and_mappings(const functi
       {
         ConstructorType=down_cast<function_sort>(ConstructorType).codomain();
       }
-      ConstructorType=UnwindType(ConstructorType);
+      UnwindType(ConstructorType, ConstructorType);
       if (!is_basic_sort(ConstructorType) ||
           sort_bool::is_bool(sort_expression(ConstructorType)) ||
           sort_pos::is_pos(sort_expression(ConstructorType)) ||
@@ -3574,15 +3579,23 @@ bool mcrl2::data::data_type_checker::TypeMatchL(
   return true;
 }
 
-
-sort_expression mcrl2::data::data_type_checker::UnwindType(const sort_expression& Type) const
+void mcrl2::data::data_type_checker::UnwindType(sort_expression& result, const sort_expression& Type) const
 {
-  return normalize_sorts(Type,get_sort_specification());
+  normalize_sorts(result, Type, get_sort_specification());
 }
 
-variable mcrl2::data::data_type_checker::UnwindType(const variable& v) const
+void mcrl2::data::data_type_checker::UnwindType(variable& result, const variable& v) const
 {
-  return variable(v.name(),UnwindType(v.sort()));
+  make_variable(result, v.name(), [&](sort_expression& result){ UnwindType(result, v.sort()); });
+}
+
+template <class T>
+bool mcrl2::data::data_type_checker::assert_equal_UnwindType(const T& x1, const T& x2) const
+{
+  T r1, r2;
+  UnwindType(r1, x1);
+  UnwindType(r2, x2);
+  return r1 == r2;
 }
 
 bool mcrl2::data::data_type_checker::TypeMatchA(
@@ -3646,11 +3659,11 @@ bool mcrl2::data::data_type_checker::TypeMatchA(
 
   if (is_basic_sort(Type))
   {
-    Type=UnwindType(Type);
+    UnwindType(Type, Type);
   }
   if (is_basic_sort(PosType))
   {
-    PosType=UnwindType(PosType);
+    UnwindType(PosType, PosType);
   }
   if (is_container_sort(Type))
   {
@@ -3939,6 +3952,7 @@ void mcrl2::data::data_type_checker::add_function(const data::function_symbol& f
   const sort_expression_list domain=function_sort(f.sort()).domain();
   const core::identifier_string& Name = f.name();
   const sort_expression& Sort = f.sort();
+  sort_expression temp;
 
   if (system_constants.count(Name)>0)
   {
@@ -3965,12 +3979,12 @@ void mcrl2::data::data_type_checker::add_function(const data::function_symbol& f
         throw mcrl2::runtime_error("Double declaration of " + msg + " " + core::pp(Name) + ".");
       }
     }
-    Types = Types + sort_expression_list({ UnwindType(Sort) });
-    user_functions[Name]=Types;
+    make_term_list<sort_expression>(user_functions[Name], std::initializer_list<sort_expression>({ Sort }), temp, [&](sort_expression& result, const sort_expression& e){ UnwindType(result, e); });
+    user_functions[Name] = Types + user_functions[Name];
   }
   else
   {
-    user_functions[Name] = sort_expression_list({ UnwindType(Sort) });
+    make_term_list<sort_expression>(user_functions[Name], std::initializer_list<sort_expression>({ Sort }), temp, [&](sort_expression& result, const sort_expression& e){ UnwindType(result, e); });
   }
 }
 

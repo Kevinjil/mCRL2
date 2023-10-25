@@ -222,6 +222,7 @@ def generate_normalize_sorts_overloads(classnames, code_map):
             text = 'void normalize_sorts(%s& x, const data::sort_specification& sortspec) { %s::normalize_sorts< %s >(x, sortspec); }\n' % (classname, namespace, classname)
         else:
             text = '%s normalize_sorts(const %s& x, const data::sort_specification& sortspec) { return %s::normalize_sorts< %s >(x, sortspec); }\n' % (classname, classname, namespace, classname)
+            text += 'void normalize_sorts(%s& result, const %s& x, const data::sort_specification& sortspec) { %s::normalize_sorts< %s >(result, x, sortspec); }\n' % (classname, classname, namespace, classname)
         if has_specification(classname):
             text = re.sub('x, sortspec', 'x, x.data()', text)
             text = re.sub('& sortspec', '& /* sortspec */', text)

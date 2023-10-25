@@ -41,6 +41,7 @@ namespace detail
 
 class sort_specification;
 sort_expression normalize_sorts(const sort_expression& x, const data::sort_specification& sortspec);
+void normalize_sorts(sort_expression& result, const sort_expression& x, const data::sort_specification& sortspec);
 
 class sort_specification
 {

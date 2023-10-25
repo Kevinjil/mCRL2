@@ -64,7 +64,9 @@ std::string pp(const process::tau& x) { return process::pp< process::tau >(x); }
 std::string pp(const process::untyped_multi_action& x) { return process::pp< process::untyped_multi_action >(x); }
 std::string pp(const process::untyped_process_assignment& x) { return process::pp< process::untyped_process_assignment >(x); }
 process::action normalize_sorts(const process::action& x, const data::sort_specification& sortspec) { return process::normalize_sorts< process::action >(x, sortspec); }
+void normalize_sorts(process::action& result, const process::action& x, const data::sort_specification& sortspec) { process::normalize_sorts< process::action >(result, x, sortspec); }
 process::action_label_list normalize_sorts(const process::action_label_list& x, const data::sort_specification& sortspec) { return process::normalize_sorts< process::action_label_list >(x, sortspec); }
+void normalize_sorts(process::action_label_list& result, const process::action_label_list& x, const data::sort_specification& sortspec) { process::normalize_sorts< process::action_label_list >(result, x, sortspec); }
 void normalize_sorts(process::process_equation_vector& x, const data::sort_specification& sortspec) { process::normalize_sorts< process::process_equation_vector >(x, sortspec); }
 void normalize_sorts(process::process_specification& x, const data::sort_specification& /* sortspec */) { process::normalize_sorts< process::process_specification >(x, x.data()); }
 process::action translate_user_notation(const process::action& x) { return process::translate_user_notation< process::action >(x); }

@@ -335,6 +335,20 @@ namespace detail
   }
 
   template <class Term, class Iter, class ATermConverter>
+  inline void make_list_backward(term_list<Term>& result, Iter first, Iter last, Term& temp, ATermConverter convert_to_aterm)
+  {
+    static_assert(std::is_base_of<aterm, Term>::value,"Term must be derived from an aterm");
+    static_assert(sizeof(Term)==sizeof(aterm),"Term derived from an aterm must not have extra fields");
+
+    while (first != last)
+    {
+      --last;
+      convert_to_aterm(temp, *last);
+      result.push_front(temp);
+    }
+  }
+
+  template <class Term, class Iter, class ATermConverter>
   inline aterm make_list_backward(Iter first, Iter last, ATermConverter convert_to_aterm)
   {
     term_list<Term> result_list;

@@ -451,6 +451,21 @@ void make_term_list(term_list<Term>& target, std::initializer_list<Term> init)
   assert(!target.defined() || target.type_is_list());
 }
 
+/// \brief A constructor based on an initializer list.
+/// \details This constructor is not made explicit to conform to initializer lists in standard containers.
+/// \param target The variable to which the list is assigned. 
+/// \param init The initialiser list.
+/// \param convert_to_aterm A class with a () operation, which is applied to each element
+///                         before it is put into the list.
+template <class Term, class  ATermConverter>
+void make_term_list(term_list<Term>& target, std::initializer_list<Term> init, Term& temp, const ATermConverter& convert_to_aterm)
+{
+  detail::make_list_backward<Term,
+                             typename std::initializer_list<Term>::const_iterator,
+                             ATermConverter >
+              (target, init.begin(), init.end(), temp, convert_to_aterm);
+  assert(!target.defined() || target.type_is_list());
+}
 
 
 /// \cond INTERNAL_DOCS
