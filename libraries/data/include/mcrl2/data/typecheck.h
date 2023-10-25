@@ -78,7 +78,8 @@ class data_type_checker: public sort_type_checker
                                              )
     {
       data_expression x1 = x;
-      TraverseVarConsTypeD(variable_context, x1, expected_sort);
+      sort_expression temp;
+      TraverseVarConsTypeD(temp, variable_context, x1, expected_sort);
       x1 = data::normalize_sorts(x1, get_sort_specification());
       if (x1.sort() != expected_sort)
       {
@@ -182,7 +183,8 @@ class data_type_checker: public sort_type_checker
       return atermpp::term_list<T>(result.begin(),result.end());
     }
 
-    sort_expression TraverseVarConsTypeD(
+    void TraverseVarConsTypeD(
+                        sort_expression& result,
                         const detail::variable_context& DeclaredVars,
                         data_expression& DataTerm,
                         const sort_expression& PosType,
